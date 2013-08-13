@@ -1,22 +1,17 @@
 import FWCore.ParameterSet.Config as cms
 
-process = cms.Process("Demo")
+process = cms.Process("View")
 
 process.load("FWCore.MessageService.MessageLogger_cfi")
 
-process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(1) )
+process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(30) )
 
 process.source = cms.Source("PoolSource",
     fileNames = cms.untracked.vstring(
-        'file:/data/yiiyama/AODSIM/GJet_Pt40_doubleEMEnriched_pythia6_Summer12.root'
+        'root://xrootd.unl.edu//store/mc/Summer12_DR53X/TTJets_FullLeptMGDecays_8TeV-madgraph/AODSIM/PU_S10_START53_V7A-v2/00001/FEAC1583-031B-E211-AF54-00215E2283FA.root'
     )
 )
 
-process.demo = cms.EDAnalyzer('GenTreeViewer',
-    genParticlesTag = cms.InputTag("genParticles"),
-    cleaningMode = cms.int32(2), # 0 -> show only full tree, 1 -> show only cleaned tree, 2 -> show both
-    minPt = cms.double(2.) # minimum Pt required for final state particles
-)
+process.load("Toolset.GenTreeViewer.genTreeViewer_cfi")
 
-
-process.p = cms.Path(process.demo)
+process.p = cms.Path(process.genTreeViewer)
