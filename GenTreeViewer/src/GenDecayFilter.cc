@@ -355,10 +355,15 @@ GenFilter::vetoMatch_(DecayNode const& _dnode, std::vector<PNode*> const& _chain
 }
 
 GenDecayFilter::GenDecayFilter(const edm::ParameterSet& _ps) :
-  genParticlesTag_(_ps.getUntrackedParameter<edm::InputTag>("genParticlesTag", edm::InputTag("genParticles"))),
-  filter_(_ps.getUntrackedParameter<std::string>("filterExpression"))
+  genParticlesTag_(_ps.getParameter<edm::InputTag>("genParticlesTag")),
+  filter_(_ps.getParameter<std::string>("filterExpression")),
+  veto_(_ps.getParameter<bool>("veto"))
 {
-  std::cout << "GenDecayFilter: " << filter_.toString() << std::endl;
+  std::cout << "GenDecayFilter: ";
+  if(veto_) std::cout << "!(";
+  std::cout << filter_.toString();
+  if(veto_) std::cout << ")";
+  std::cout << std::endl;
 }
 
 bool
@@ -385,6 +390,7 @@ GenDecayFilter::filter(edm::Event& _event, const edm::EventSetup&)
     cleanDaughters(rootNodes[iN]);
 
   bool pass(filter_.pass(rootNodes));
+  if(veto_) pass = !pass;
 
   for(unsigned iN(0); iN != rootNodes.size(); iN++)
     delete rootNodes[iN];
@@ -396,8 +402,9 @@ void
 GenDecayFilter::fillDescriptions(edm::ConfigurationDescriptions& _descriptions)
 {
   edm::ParameterSetDescription desc;
-  desc.addUntracked<edm::InputTag>("genParticlesTag", edm::InputTag("genParticles"));
-  desc.addUntracked<std::string>("filterExpression", "");
+  desc.add<edm::InputTag>("genParticlesTag", edm::InputTag("genParticles"));
+  desc.add<std::string>("filterExpression", "");
+  desc.add<bool>("veto", false);
 
   _descriptions.add("genDecayFilter", desc);
 }

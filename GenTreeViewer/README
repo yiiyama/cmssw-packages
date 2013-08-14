@@ -1,0 +1,105 @@
+Package Toolset/GenTreeViewer
+
+---GenTreeViewer---
+An EDAnalyzer module used to browse the decay tree of the generated particles
+
+=Overview
+The module takes an EDM input that contains a GenParticleCollection and prints out the entire decay chain
+event by event, using the mother-daughter relations recorded in the GenParticles. As such, the module is very
+similar to the ParticleTreeDrawer utility provided with CMSSW (see SWGuideCandidateModules twiki). The additional
+feature of this module is that it applies a custom arbitration when a particle has multiple mothers, thus
+guaranteeing that the decay tree has a strictly tree-like topology, and that each particle only appears once
+in the tree. (In a 2->N process and during hadronization, event generators often record the particles as having
+multiple mothers. ParticleTreeDrawer will duplicate the decay branch in such cases.)
+
+The arbitration takes place whenever the code encounters two particles that share a daughter, and is done by
+the following rules:
+ - If either of the mothers is a hadron* and the other is not, the non-hadronic mother will adopt the daughter.
+ - If both mothers are hadrons, the mother with a greater Pt will adopt the daughter.
+ - If both mothers are non-hadrons, one that appears first in the GenParticles list will adopt the daughter.
+These rules are implemented in src/Utilities.cc in the function setDaughter().
+
+Another feature is the cleaning & pruning of the tree. This feature can be turned on/off via a runtime configuration.
+When running in the cleaning mode, the particles that satisfy either of the following criteria is removed from
+the tree.
+ - A particle is a terminal node in the tree (i.e. has no daughters), and its status is not 1.
+ - A particle has only one daughter whose PDG ID is equal to that of the particle.
+ - A particle has a status that is not 1 and is a hadron that does not contain heavy quarks*.
+ - A particle is a light quark that has only light quarks as daughters.
+These rules are implemented in src/Utilities.cc in the function cleanDaughters(). When a particle in the middle of
+a branch is removed, its daughter branches are attached to the mother of the removed particle.
+
+* hadron: A particle with a PDG ID that satisfies either of the following:
+ - Is 21
+ - Third digit is not zero
+ - Is greater than 80 and less than 101
+* heavy quark: c, b, t
+
+=Instruction
+An example job configuration is given in test/gentreeviewer_cfg.py. The full list of configurable parameters
+can be found in python/genTreeViewer_cfi.py. Those are:
+ - genParticlesTag: InputTag for the GenParticleCollection (usually genParticles)
+ - cleaningMode: Switch for the cleaning explained above. Set to 0 if only the full tree is desired, 1 for cleaned
+tree, and 2 for both.
+ - minPt: Pt threshold for the final state particles to appear in the tree.
+
+---GenDecayFilter---
+An EDFilter based on the decay chain
+
+=Overview
+The module filters an EDM input based on the decay chain fragment specified by the user as a simple string
+in the job configuration. It uses the same mechanism as the GenTreeViewer to construct the cleaned decay
+tree, and searches the tree for a decay chain fragment. Return value is true if the chain fragment is found
+(false if the veto flag is set in the configuration).
+
+=Instruction
+An example job configuration is given in test/gendecayfilter_cfg.py. There are only three configurable parameters
+for the module, as found in python/genDecayFilter_cfi.py. Those are:
+ - genParticlesTag: InputTag for the GenParticleCollection (usually genParticles)
+ - filterExpression: The decay chain fragment (see below for syntax documentation)
+ - veto: Switch to invert the filter decision (the module returns true if veto is False and the fragment is found)
+
+=Syntax
+Decay chain must be specified in terms of PDG ID. A mother-daughter relationship is represented by the symbol ">".
+The PDG ID can be signed (prepended with + or -) or unsigned. The former will match to the exact PDG ID value,
+whereas the latter can match to both the particle and the antiparticle. For hadronic particles, instead of
+specifying the PDG ID, one can use the letter 'j' to represent any hadrons or 'b' to represent specifically those
+that contain a b quark.
+
+Example:
+filterExpression = '6>24>11'
+will pass all events where a top quark or antiquark decays to W+- that subsequently decays to an electron or
+a positron, whereas
+filterExpression = '+6>+24>-11'
+will pass only events with a top quark decaying to W+ that in turn decays to a positron.
+
+The symbol '>' stands for a direct mother-daughter relationship. If an indirect relationship with an arbitrary
+number of generations in between is desired, a wildcard character '*' should be used.
+
+Example:
+filterExpression = '24>*>11'
+will pass all events where a W+- has an electron as its descendant at some point in the decay tree. This will
+capture both W->e+nu and W->tau+nu where tau decays electronically.
+
+If, on the other hand, certain intermediate particle is undesired, the veto character '!' can prepend the particle
+ID.
+
+Example:
+filterExpression = '24>!j>11'
+will pass all events where a W+- has an electron as its descendant at some point in the decay tree, except for
+when a hadronic particle is in between the two (e.g. when the electron is within a heavy-flavor jet).
+
+Simple fragments can be concatenated with && and || to form more complex expressions.
+
+Example:
+filterExpression = '15>11 || 15>13'
+will pass all events where a tau decays to either an electron or a muon.
+
+filterExpression = '(+6>+24>-11 || +6>+24>-13) && (-6>-24>+11 || -6>-24>+13)'
+will pass only full-leptonic ttbar events.
+
+Finally, a fragment can be vetoed as a whole if preceded by the veto character.
+
+Example:
+filterExpression = '24>j && !(24>b)'
+will pass events where the W+- decays only to light jets.

@@ -94,6 +94,7 @@ private:
       
   edm::InputTag genParticlesTag_;
   GenFilter filter_;
+  bool veto_;
 };
 
 #endif

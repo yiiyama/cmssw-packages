@@ -1,6 +1,7 @@
 import FWCore.ParameterSet.Config as cms
 
 genDecayFilter = cms.EDFilter("GenDecayFilter",
-    genParticlesTag = cms.untracked.InputTag("genParticles"),
-    filterExpression = cms.untracked.string("")
+    genParticlesTag = cms.InputTag("genParticles"),
+    filterExpression = cms.string(""),
+    veto = cms.bool(False)
 )
