@@ -9,11 +9,23 @@
 #include <algorithm>
 
 struct PNode {
-  PNode() : mother(0), daughters(0), pdgId(0), status(0), mass(0.) {}
+  PNode* mother;
+  std::vector<PNode*> daughters;
+  int pdgId;
+  int status;
+  double mass;
+  double pt;
+  double eta;
+  double phi;
+  bool ownDaughters;
+
+  PNode() : mother(0), daughters(0), pdgId(0), status(0), mass(0.), pt(0.), eta(0.), phi(0.), ownDaughters(false) {}
   ~PNode()
   {
-    for(unsigned iD(0); iD != daughters.size(); ++iD)
-      delete daughters[iD];
+    if(ownDaughters){
+      for(unsigned iD(0); iD != daughters.size(); ++iD)
+        delete daughters[iD];
+    }
   }
   PNode& operator=(PNode const& _rhs)
   {
@@ -73,15 +85,6 @@ struct PNode {
 
     return ss.str();
   }
-
-  PNode* mother;
-  std::vector<PNode*> daughters;
-  int pdgId;
-  int status;
-  double mass;
-  double pt;
-  double eta;
-  double phi;
 };
 
 #endif

@@ -1,16 +1,24 @@
-// system include files
-#include <vector>
-#include <iostream>
+#include "SusyEvent.h"
+
+#include "../interface/GenFilter.h"
 
 #include "TString.h"
 
-// user include files
-#include "SusyEvent.h"
+#include <vector>
 
-#include "../interface/PNode.h"
+class GenDecayFilterRA3 {
+public:
+  GenDecayFilterRA3(TString const& _filterExpr) : filter_(_filterExpr) {}
+  ~GenDecayFilterRA3() {}
 
-void
-viewGenTreeRA3(susy::Event const& _event, bool _showMass = false)
+  bool pass(susy::Event const&);
+
+private:
+  GenFilter filter_;
+};
+
+bool
+GenDecayFilterRA3::pass(susy::Event const& _event)
 {
   susy::ParticleCollection const& particles(_event.genParticles);
 
@@ -23,10 +31,6 @@ viewGenTreeRA3(susy::Event const& _event, bool _showMass = false)
     PNode& node(allNodes[iP]);
     node.pdgId = gen.pdgId;
     node.status = gen.status;
-    node.mass = gen.momentum.M();
-    node.pt = gen.momentum.Pt();
-    node.eta = node.pt > 0. ? gen.momentum.Eta() : (gen.momentum.Z() > 0. ? 10000. : -10000.);
-    node.phi = gen.momentum.Phi();
   }
 
   for(unsigned iP(0); iP != particles.size(); ++iP){
@@ -41,10 +45,5 @@ viewGenTreeRA3(susy::Event const& _event, bool _showMass = false)
     }
   }
 
-  std::cout << "--- CLEANED DECAY TREE ---" << std::endl << std::endl;
-  for(unsigned iN(0); iN < rootNodes.size(); iN++){
-    std::cout << rootNodes[iN]->print(_showMass);
-    std::cout << std::endl;
-  }
-  std::cout << std::endl;
+  return filter_.pass(rootNodes);
 }
