@@ -40,6 +40,7 @@ class GenFilter {
     kNOT,
     kOR,
     kAND,
+    kTrue,
     nTypes
   };
 
@@ -67,6 +68,11 @@ GenFilter::GenFilter(TString const& _expr) :
   TPRegexp wrappingPat("([!]?)(\\(.*\\))");
 
   TString expr(_expr.Strip(TString::kBoth));
+
+  if(expr.Length() == 0){
+    type_ = kTrue;
+    return;
+  }
 
   if(!expr.Contains("&&") && !expr.Contains("||")){
     if(expr.Contains(" ")) throw std::runtime_error(("incorrect syntax in " + expr).Data());
@@ -283,6 +289,8 @@ GenFilter::pass(std::vector<PNode*> const& _rootNodes) const
 
     if(type_ == kAND) return true;
     else return false;
+  case kTrue:
+    return true;
   default:
     return false;
   }

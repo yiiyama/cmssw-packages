@@ -18,6 +18,10 @@ setDaughters(reco::GenParticle const* _gen, std::map<reco::GenParticle const*, P
   node->pt = _gen->pt();
   node->eta = _gen->eta();
   node->phi = _gen->phi();
+  node->px = _gen->px();
+  node->py = _gen->py();
+  node->pz = _gen->pz();
+  node->energy = _gen->energy();
   node->ownDaughters = true;
   _nodeMap[_gen] = node;
 

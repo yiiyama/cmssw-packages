@@ -17,6 +17,9 @@
 
 GenTreeViewer::GenTreeViewer(edm::ParameterSet const& _ps) :
   genParticlesTag_(_ps.getUntrackedParameter<edm::InputTag>("genParticlesTag", edm::InputTag("genParticles"))),
+  showMomentum_(_ps.getUntrackedParameter<bool>("showMomentum", true)),
+  showMass_(_ps.getUntrackedParameter<bool>("showMass", true)),
+  usePtEtaPhi_(_ps.getUntrackedParameter<bool>("usePtEtaPhi", true)),
   cleaningMode_(_ps.getUntrackedParameter<int>("cleaningMode", 1)),
   minPt_(_ps.getUntrackedParameter<double>("minPt", 2.))
 {
@@ -43,7 +46,7 @@ GenTreeViewer::analyze(edm::Event const& _event, edm::EventSetup const&)
   if(cleaningMode_ == 0 || cleaningMode_ == 2){
     std::cout << "=== FULL DECAY TREE ===" << std::endl << std::endl;
     for(unsigned iN(0); iN < rootNodes.size(); iN++){
-      std::cout << rootNodes[iN]->print(true);
+      std::cout << rootNodes[iN]->print(showMomentum_, showMass_, usePtEtaPhi_);
       std::cout << std::endl;
     }
   }
@@ -52,7 +55,7 @@ GenTreeViewer::analyze(edm::Event const& _event, edm::EventSetup const&)
     std::cout << "--- CLEANED DECAY TREE ---" << std::endl << std::endl;
     for(unsigned iN(0); iN < rootNodes.size(); iN++){
       cleanDaughters(rootNodes[iN]);
-      std::cout << rootNodes[iN]->print(true);
+      std::cout << rootNodes[iN]->print(showMomentum_, showMass_, usePtEtaPhi_);
       std::cout << std::endl;
     }
   }
@@ -67,6 +70,9 @@ GenTreeViewer::fillDescriptions(edm::ConfigurationDescriptions& _descriptions)
 {
   edm::ParameterSetDescription desc;
   desc.addUntracked<edm::InputTag>("genParticlesTag", edm::InputTag("genParticles"));
+  desc.addUntracked<bool>("showMomentum", true);
+  desc.addUntracked<bool>("showMass", true);
+  desc.addUntracked<bool>("usePtEtaPhi", true);
   desc.addUntracked<int>("cleaningMode", 1);
   desc.addUntracked<double>("minPt", 2.);
 

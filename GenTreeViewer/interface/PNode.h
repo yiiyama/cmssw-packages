@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <map>
 #include <algorithm>
+#include <cmath>
 
 struct PNode {
   PNode* mother;
@@ -17,9 +18,16 @@ struct PNode {
   double pt;
   double eta;
   double phi;
+  double px;
+  double py;
+  double pz;
+  double energy;
   bool ownDaughters;
 
-  PNode() : mother(0), daughters(0), pdgId(0), status(0), mass(0.), pt(0.), eta(0.), phi(0.), ownDaughters(false) {}
+  PNode() : mother(0), daughters(0), pdgId(0), status(0),
+            mass(0.), pt(0.), eta(0.), phi(0.),
+            px(0.), py(0.), pz(0.), energy(0.),
+            ownDaughters(false) {}
   ~PNode()
   {
     if(ownDaughters){
@@ -37,30 +45,51 @@ struct PNode {
     pt = _rhs.pt;
     eta = _rhs.eta;
     phi = _rhs.phi;
+    px = _rhs.px;
+    py = _rhs.py;
+    pz = _rhs.pz;
+    energy = _rhs.energy;
     return *this;
   }
-  std::string print(bool _showMass = false)
+  std::string print(bool _showMomentum = true, bool _showMass = false, bool _usePtEtaPhi = true)
   {
     using namespace std;
 
-    string spaceHolder;
-    for(unsigned i(0); i != 31; ++i) spaceHolder += " ";
-    if(_showMass)
-      for(unsigned i(0); i != 9; ++i) spaceHolder += " ";
-
     stringstream ss;
-    ss << "+" << setw(8) << pdgId;
+    ss << "+" << setw(9) << pdgId;
+
     if(_showMass)
       ss << " [" << setw(6) << fixed << setprecision(2) << mass << "]";
-    ss << " (" << setw(5) << fixed << setprecision(1) << pt << ",";
-    if(eta > 3.5)
-      ss << "  inf,";
-    else if(eta < -3.5)
-      ss << " -inf,";
-    else
-      ss << setw(5) << fixed << setprecision(1) << eta << ",";
-    ss << setw(5) << fixed << setprecision(1) << phi << ") ";
-    ss << status << " ";
+
+    if(_showMomentum){
+      if(_usePtEtaPhi){
+        ss << " (";
+        ss << setw(5) << fixed << setprecision(pt < 1000. ? 1 : 0) << pt;
+        ss << ",";
+        if(eta > 10.)
+          ss << "  inf";
+        else if(eta < -10.)
+          ss << " -inf";
+        else
+          ss << setw(5) << fixed << setprecision(1) << eta;
+        ss << ",";
+        ss << setw(5) << fixed << setprecision(1) << phi;
+        ss << ")";
+      } 
+      else{
+        double p4[4] = {px, py, pz, energy};
+        ss << " (";
+        for(unsigned iP(0); iP != 4; ++iP){
+          ss << setw(5) << fixed << setprecision(p4[iP] < 1000. ? 1 : 0) << p4[iP];
+          if(iP != 3) ss << ",";
+        }
+        ss << ")";
+      }
+    }
+
+    ss << " " << status << " ";
+
+    string spaceHolder(ss.str().length() - 1, ' ');
 
     for(unsigned iD(0); iD < daughters.size(); iD++){
       string line;
@@ -80,10 +109,33 @@ struct PNode {
           node = motherNode;
         }
       }
-      ss << line << daughters[iD]->print(_showMass);
+      ss << line << daughters[iD]->print(_showMomentum, _showMass, _usePtEtaPhi);
     }
 
     return ss.str();
+  }
+  bool hasDescendant(int _pdgId, bool _signed = false){
+    for(unsigned iD(0); iD != daughters.size(); ++iD){
+      if(_signed){
+        if(daughters[iD]->pdgId == _pdgId) return true;
+      }
+      else{
+        if(std::abs(daughters[iD]->pdgId) == _pdgId) return true;
+      }
+      if(daughters[iD]->hasDescendant(_pdgId, _signed)) return true;
+    }
+    return false;
+  }
+  bool hasAncestor(int _pdgId, bool _signed = false){
+    if(!mother) return false;
+
+    if(_signed){
+      if(mother->pdgId == _pdgId) return true;
+    }
+    else{
+      if(std::abs(mother->pdgId) == _pdgId) return true;
+    }
+    return mother->hasAncestor(_pdgId, _signed);
   }
 };
 
