@@ -5,7 +5,6 @@
 #include <sstream>
 #include <string>
 #include <iomanip>
-#include <map>
 #include <algorithm>
 #include <cmath>
 
@@ -23,6 +22,10 @@ struct PNode {
   double pz;
   double energy;
   bool ownDaughters;
+
+  static double matchEta;
+  static double matchPhi;
+  static double matchDR;
 
   PNode() : mother(0), daughters(0), pdgId(0), status(0),
             mass(0.), pt(0.), eta(0.), phi(0.),
@@ -87,29 +90,40 @@ struct PNode {
       }
     }
 
-    ss << " " << status << " ";
-
-    string spaceHolder(ss.str().length() - 1, ' ');
-
-    for(unsigned iD(0); iD < daughters.size(); iD++){
-      string line;
-      if(iD > 0){
-        ss << endl;
-        PNode* node(this);
-        while(node){
-          PNode* motherNode(node->mother);
-          bool isLastChild(!motherNode);
-          if(motherNode){
-            std::vector<PNode*>& siblings(motherNode->daughters);
-            std::vector<PNode*>::iterator nItr(std::find(siblings.begin(), siblings.end(), node));
-            isLastChild = (++nItr == siblings.end());
-          }
-          line = (isLastChild ? " " : "|") + spaceHolder + line;
-
-          node = motherNode;
-        }
+    if(status == 1){
+      if(matchDR > 0.){
+        double dEta(eta - matchEta);
+        double dPhi(phi - matchPhi);
+        if(dPhi > 3.141593) dPhi -= 6.283185307;
+        if(dPhi < -3.141593) dPhi += 6.283185307;
+        if(std::sqrt(dEta * dEta + dPhi * dPhi) < matchDR) ss << " *";
       }
-      ss << line << daughters[iD]->print(_showMomentum, _showMass, _usePtEtaPhi);
+    }
+    else{
+      ss << " " << status << " ";
+
+      string spaceHolder(ss.str().length() - 1, ' ');
+
+      for(unsigned iD(0); iD < daughters.size(); iD++){
+        string line;
+        if(iD > 0){
+          ss << endl;
+          PNode* node(this);
+          while(node){
+            PNode* motherNode(node->mother);
+            bool isLastChild(!motherNode);
+            if(motherNode){
+              std::vector<PNode*>& siblings(motherNode->daughters);
+              std::vector<PNode*>::iterator nItr(std::find(siblings.begin(), siblings.end(), node));
+              isLastChild = (++nItr == siblings.end());
+            }
+            line = (isLastChild ? " " : "|") + spaceHolder + line;
+
+            node = motherNode;
+          }
+        }
+        ss << line << daughters[iD]->print(_showMomentum, _showMass, _usePtEtaPhi);
+      }
     }
 
     return ss.str();
