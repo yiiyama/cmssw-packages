@@ -12,19 +12,31 @@
 #include "DataFormats/HepMCCandidate/interface/GenParticle.h"
 #include "DataFormats/HepMCCandidate/interface/GenParticleFwd.h"
 
+#include "SimDataFormats/GeneratorProducts/interface/HepMCProduct.h"
+
 #include "../interface/GenFilter.h"
 #include "../interface/Utilities.h"
 
+#include "TString.h"
+
 GenDecayFilter::GenDecayFilter(const edm::ParameterSet& _ps) :
-  genParticlesTag_(_ps.getParameter<edm::InputTag>("genParticlesTag")),
-  filter_(_ps.getParameter<std::string>("filterExpression")),
+  sourceTag_(_ps.getParameter<edm::InputTag>("sourceTag")),
+  useGenParticles_(_ps.getUntrackedParameter<bool>("useGenParticles")),
+  filter_(0),
   veto_(_ps.getParameter<bool>("veto"))
 {
+  TString expr(_ps.getParameter<std::string>("filterExpression"));
+  filter_ = GenFilter::parseExpression(expr);
   std::cout << "GenDecayFilter: ";
   if(veto_) std::cout << "!(";
-  std::cout << filter_.toString();
+  std::cout << filter_->toString();
   if(veto_) std::cout << ")";
   std::cout << std::endl;
+}
+
+GenDecayFilter::~GenDecayFilter()
+{
+  delete filter_;
 }
 
 bool
@@ -32,25 +44,48 @@ GenDecayFilter::filter(edm::Event& _event, const edm::EventSetup&)
 {
   if(_event.isRealData()) return true;
 
-  edm::Handle<reco::GenParticleCollection> gpHndl;
-  if(!_event.getByLabel(genParticlesTag_, gpHndl)) return false;
-
-  std::map<reco::GenParticle const*, PNode*> nodeMap;
   std::vector<PNode*> rootNodes;
 
-  for(reco::GenParticleCollection::const_iterator genItr(gpHndl->begin()); genItr != gpHndl->end(); ++genItr){
-    reco::GenParticle const& gen(*genItr);
+  if(useGenParticles_){
+    edm::Handle<reco::GenParticleCollection> gpHndl;
+    if(!_event.getByLabel(sourceTag_, gpHndl))
+      throw cms::Exception("ProductNotFound") << sourceTag_;
 
-    if(gen.numberOfMothers() == 0){
-      PNode* node(setDaughters(&gen, nodeMap, 0.));
-      if(node) rootNodes.push_back(node);
+    std::map<reco::GenParticle const*, PNode*> nodeMap;
+
+    for(reco::GenParticleCollection::const_iterator genItr(gpHndl->begin()); genItr != gpHndl->end(); ++genItr){
+      reco::GenParticle const& gen(*genItr);
+
+      if(gen.numberOfMothers() == 0){
+        PNode* node(setDaughters(&gen, nodeMap, 0.));
+        if(node) rootNodes.push_back(node);
+      }
+    }
+  }
+  else{
+    edm::Handle<edm::HepMCProduct> mcHndl;
+    if(!_event.getByLabel(sourceTag_, mcHndl))
+      throw cms::Exception("ProductNotFound") << sourceTag_;
+
+    HepMC::GenEvent const* event(mcHndl->GetEvent());
+
+    std::map<HepMC::GenParticle const*, PNode*> nodeMap;
+
+    for(HepMC::GenEvent::particle_const_iterator pItr(event->particles_begin()); pItr != event->particles_end(); ++pItr){
+      HepMC::GenParticle const& gen(**pItr);
+      HepMC::GenVertex const* vtx(gen.production_vertex());
+
+      if(!vtx || vtx->particles_in_size() == 0){
+        PNode* node(setDaughters(&gen, nodeMap, 0.));
+        if(node) rootNodes.push_back(node);
+      }
     }
   }
 
   for(unsigned iN(0); iN != rootNodes.size(); iN++)
     cleanDaughters(rootNodes[iN]);
 
-  bool pass(filter_.pass(rootNodes));
+  bool pass(filter_->pass(rootNodes));
   if(veto_) pass = !pass;
 
   for(unsigned iN(0); iN != rootNodes.size(); iN++)
@@ -63,7 +98,8 @@ void
 GenDecayFilter::fillDescriptions(edm::ConfigurationDescriptions& _descriptions)
 {
   edm::ParameterSetDescription desc;
-  desc.add<edm::InputTag>("genParticlesTag", edm::InputTag("genParticles"));
+  desc.add<edm::InputTag>("sourceTag", edm::InputTag("genParticles"));
+  desc.addUntracked<bool>("useGenParticles", true);
   desc.add<std::string>("filterExpression", "");
   desc.add<bool>("veto", false);
 

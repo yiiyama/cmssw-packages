@@ -9,6 +9,7 @@
 
 #include <vector>
 #include <stdexcept>
+#include <iostream>
 
 struct DecayNode {
   DecayNode() :
@@ -27,278 +28,297 @@ struct DecayNode {
   bool passIfMatch;
 };
 
+typedef std::vector<DecayNode const*> DecayChain;
+
 class GenFilter {
  public:
-  GenFilter(TString const&);
-  ~GenFilter();
+  static GenFilter* parseExpression(TString const&, unsigned* = 0);
+
+  virtual TString toString() const = 0;
+  virtual bool pass(std::vector<PNode*> const&) const = 0;
+};
+
+class DecayChainFilter : public GenFilter {
+ public:
+  DecayChainFilter(DecayChain const&);
+  ~DecayChainFilter();
+
+  static DecayChainFilter* parseExpression(TString const&, unsigned* = 0);
 
   TString toString() const;
   bool pass(std::vector<PNode*> const&) const;
 
-  enum Types {
-    kAtomic,
-    kNOT,
-    kOR,
-    kAND,
-    kTrue,
-    nTypes
-  };
-
- private:
+ protected:
   bool chainMatch_(unsigned, std::vector<PNode*> const&) const;
   bool oneToOneMatch_(DecayNode const&, PNode&) const;
   std::vector<PNode*> anyDecayMatch_(DecayNode const&, PNode&, std::vector<std::vector<PNode*> >* = 0) const;
   bool vetoMatch_(DecayNode const&, std::vector<PNode*> const&) const;
 
-  std::vector<DecayNode> decayChain_;
-  std::vector<GenFilter*> subfilters_;
-  Types type_;
+  DecayChain chain_;
 };
 
-inline
-GenFilter::GenFilter(TString const& _expr) :
-  decayChain_(0),
-  subfilters_(0),
-  type_(nTypes)
+class NestedGenFilter : public GenFilter {
+ public:
+  NestedGenFilter(GenFilter const*, bool);
+  ~NestedGenFilter();
+
+  static NestedGenFilter* parseExpression(TString const&, unsigned* = 0);
+
+  TString toString() const;
+  bool pass(std::vector<PNode*> const&) const;
+
+  bool invert() const { return invert_; }
+  void setInvert(bool _inv) { invert_ = _inv; }
+
+ protected:
+  GenFilter const* content_;
+  bool invert_;
+};
+
+class ChainedGenFilter : public GenFilter {
+ public:
+  enum Operator {
+    kOR,
+    kAND,
+    nOperators
+  };
+
+  ChainedGenFilter(Operator);
+  ~ChainedGenFilter();
+
+  TString toString() const;
+  bool pass(std::vector<PNode*> const&) const;
+
+  void addTerm(GenFilter const* _term) { terms_.push_back(_term); }
+
+  Operator getOperator() const { return operator_; }
+
+ protected:
+  std::vector<GenFilter const*> terms_;
+  Operator operator_;
+};
+
+/*static*/
+GenFilter*
+GenFilter::parseExpression(TString const& _expr, unsigned* _nParsed/* = 0*/)
 {
   // Example expression: (neutralino -> Z -> e OR chargino -> W -> e) AND neutralino -> gamma
   // (1000022>23>!15>11 || 1000024>24>!15>11) && 1000022>*>22
-  TPRegexp particlePat("([!]?)([+-]?)([0-9]+|b|j|[*])");
-  TPRegexp chainPat("(?:" + particlePat.GetPattern() + "+[>]?)+");
-  TPRegexp wrappingPat("([!]?)(\\(.*\\))");
 
-  TString expr(_expr.Strip(TString::kBoth));
+  TString expr(_expr.Strip(TString::kLeading));
 
-  if(expr.Length() == 0){
-    type_ = kTrue;
-    return;
+  if(expr.Length() == 0)
+    throw std::runtime_error(("Empty expression block in " + _expr).Data());
+
+  unsigned nParsed(0);
+  
+  GenFilter* filter(0);
+  if(expr(0) == '(' || expr(0, 2) == "!(")
+    filter = NestedGenFilter::parseExpression(expr, &nParsed);
+  else
+    filter = DecayChainFilter::parseExpression(expr, &nParsed);
+
+  expr = expr.Remove(0, nParsed).Strip(TString::kLeading);
+
+  if(expr.Length() == 0 || expr(0) == ')'){
+    if(_nParsed) *_nParsed = _expr.Length() - expr.Length();
+    return filter;
   }
 
-  if(!expr.Contains("&&") && !expr.Contains("||")){
-    if(expr.Contains(" ")) throw std::runtime_error(("incorrect syntax in " + expr).Data());
+  // next expression must be an operator
 
-    if(wrappingPat.MatchB(expr)){
-      if(expr.Index(wrappingPat) != 0) throw std::runtime_error(("incorrect syntax in " + expr).Data());
+  ChainedGenFilter* chainFilter(0);
 
-      TObjArray* matches(wrappingPat.MatchS(expr));
-      TString notExpr(matches->At(1)->GetName());
-      TString subExpr(matches->At(2)->GetName());
-      delete matches;
+  if(expr(0, 2) == "||")
+    chainFilter = new ChainedGenFilter(ChainedGenFilter::kOR);
+  else if(expr(0, 2) == "&&")
+    chainFilter = new ChainedGenFilter(ChainedGenFilter::kAND);
+  else
+    throw std::runtime_error(("Syntax error in " + _expr).Data());
 
-      expr = subExpr(1, subExpr.Length() - 2);
+  chainFilter->addTerm(filter);
 
-      if(notExpr == "!"){
-        type_ = kNOT;
-        subfilters_.push_back(new GenFilter(expr));
-        return;
-      }
-    }
+  expr = expr.Remove(0, 2).Strip(TString::kLeading);
 
-    type_ = kAtomic;
+  bool expectTerm(true);
+  while(expr.Length() != 0){
+    ChainedGenFilter::Operator op(ChainedGenFilter::nOperators);
+    if(expr(0, 2) == "||")
+      op = ChainedGenFilter::kOR;
+    else if(expr(0, 2) == "&&")
+      op = ChainedGenFilter::kAND;
 
-    if(!chainPat.MatchB(expr)) throw std::runtime_error(("incorrect syntax in " + expr).Data());
+    if(op == ChainedGenFilter::nOperators){
+      if(expr(0) == ')') break;
 
-    decayChain_.push_back(DecayNode(0, false, true));
+      if(!expectTerm)
+        throw std::runtime_error(("Syntax error in " + _expr).Data());
 
-    TString chainStr(expr(chainPat));
-    TObjArray* particles(chainStr.Tokenize(">"));
-
-    for(int iP(0); iP < particles->GetEntries(); ++iP){
-      TString particle(particles->At(iP)->GetName());
-
-      TObjArray* matches(particlePat.MatchS(particle));
-
-      bool passIfMatch(TString(matches->At(1)->GetName()).Length() == 0);
-      TString sign(matches->At(2)->GetName());
-      TString idStr(matches->At(3)->GetName());
-
-      delete matches;
-
-      int pdgId(0);
-      if(idStr == "j")
-	pdgId = 100;
-      else if(idStr == "b")
-	pdgId = 500;
-      else if(idStr == "*")
-	pdgId = 0;
+      if(expr(0) == '(' || expr(0, 2) == "!(")
+        chainFilter->addTerm(NestedGenFilter::parseExpression(expr, &nParsed));
       else
-	pdgId = (sign + idStr).Atoi();
+        chainFilter->addTerm(DecayChainFilter::parseExpression(expr, &nParsed));
 
-      if(pdgId == 0 && (iP == 0 || iP == particles->GetEntries() - 1))
-	throw std::runtime_error("wildcard as the end node");
-      if((pdgId == 0 || !passIfMatch) && (decayChain_.back().pdgId == 0 || !decayChain_.back().passIfMatch))
-	throw std::runtime_error("consequtive wildcarding");
+      expr = expr.Remove(0, nParsed).Strip(TString::kLeading);
 
-      decayChain_.push_back(DecayNode(pdgId, sign.Length() != 0, passIfMatch));
+      expectTerm = false;
     }
+    else{
+      if(expectTerm)
+        throw std::runtime_error(("Syntax error in " + _expr).Data());
+      if(op != chainFilter->getOperator())
+        throw std::runtime_error(("Mixed and/or in " + _expr).Data());
 
-    delete particles;
-    return;
+      expr = expr.Remove(0, 2).Strip(TString::kLeading);
+
+      expectTerm = true;
+    }
   }
+  
+  if(_nParsed) *_nParsed = _expr.Length() - expr.Length();
 
-  while(expr.Length() > 0){
-    if(expr.Index(chainPat) == 0){
-      TString chainStr(expr(chainPat));
-      subfilters_.push_back(new GenFilter(chainStr));
-      expr = expr(chainStr.Length(), expr.Length());
-      expr = expr.Strip(TString::kLeading);
-    }
-    else if(expr.Index(wrappingPat) == 0){
-      TObjArray* matches(wrappingPat.MatchS(expr));
-
-      TString notExpr(matches->At(1)->GetName());
-      TString subExpr(matches->At(2)->GetName());
-
-      delete matches;
-
-      int nestDepth(1);
-      int iS(1);
-      while(iS < subExpr.Length() && nestDepth > 0){
-	int nextOpen(subExpr.Index("(", iS));
-	int nextClose(subExpr.Index(")", iS));
-	if(nextOpen == -1 || nextClose == -1){
-	  iS = subExpr.Length();
-	  break;
-	}
-
-	if(nextOpen < nextClose){
-	  iS = nextOpen + 1;
-	  ++nestDepth;
-	}
-	else{
-	  iS = nextClose + 1;
-	  --nestDepth;
-	}
-      }
-      if(nestDepth != 0) throw std::runtime_error(("nested expression incorrect in " + subExpr).Data());
-
-      if(expr.Length() == iS){ // when the whole expression is in the brackets for no reason
-        expr = expr(1, iS - 1);
-        expr.Strip(TString::kLeading);
-        continue;
-      }
-
-      subExpr = subExpr(1, iS - 1);
-
-      if(notExpr == "!") subfilters_.push_back(new GenFilter("!(" + subExpr + ")"));
-      else subfilters_.push_back(new GenFilter(subExpr));
-
-      expr = expr(notExpr.Length() + iS, expr.Length());
-    }
-    else if(expr.Index("&&") == 0){
-      if(type_ == kOR) throw std::runtime_error("mixed and/or");
-      type_ = kAND;
-      expr = expr(2, expr.Length());
-    }
-    else if(expr.Index("||") == 0){
-      if(type_ == kAND) throw std::runtime_error("mixed and/or");
-      type_ = kOR;
-      expr = expr(2, expr.Length());
-    }
-
-    expr = expr.Strip(TString::kLeading);
-  }
+  return chainFilter;
 }
 
-inline
-GenFilter::~GenFilter()
+/*static*/
+DecayChainFilter*
+DecayChainFilter::parseExpression(TString const& _expr, unsigned* _nParsed/* = 0*/)
 {
-  for(unsigned iF(0); iF < subfilters_.size(); ++iF)
-    delete subfilters_[iF];
+  TPRegexp particlePat("([!]?)([+-]?)([0-9]+|b|j|[*])");
+  TPRegexp chainPat("^[ ]*(?:" + particlePat.GetPattern() + "+[>]?)+");
+
+  if(!chainPat.MatchB(_expr))
+    throw std::runtime_error(("Invalid decay chain in " + _expr).Data());
+
+  DecayChain chain;
+
+  chain.push_back(new DecayNode(0, false, true));
+
+  TString chainStr(_expr(chainPat));
+  TObjArray* particles(chainStr.Tokenize(">"));
+
+  for(int iP(0); iP < particles->GetEntries(); ++iP){
+    TString particle(particles->At(iP)->GetName());
+
+    TObjArray* matches(particlePat.MatchS(particle));
+
+    bool passIfMatch(TString(matches->At(1)->GetName()).Length() == 0);
+    TString sign(matches->At(2)->GetName());
+    TString idStr(matches->At(3)->GetName());
+
+    delete matches;
+
+    int pdgId(0);
+    if(idStr == "j")
+      pdgId = 100;
+    else if(idStr == "b")
+      pdgId = 500;
+    else if(idStr == "*")
+      pdgId = 0;
+    else
+      pdgId = (sign + idStr).Atoi();
+
+    if(pdgId == 0 && (iP == 0 || iP == particles->GetEntries() - 1))
+      throw std::runtime_error(("Wildcard as the end node in " + _expr).Data());
+    if((pdgId == 0 || !passIfMatch) && (chain.back()->pdgId == 0 || !chain.back()->passIfMatch))
+      throw std::runtime_error(("Consequtive wildcarding " + _expr).Data());
+
+    chain.push_back(new DecayNode(pdgId, sign.Length() != 0, passIfMatch));
+  }
+
+  delete particles;
+
+  if(_nParsed) *_nParsed = chainStr.Length();
+
+  return new DecayChainFilter(chain);
 }
 
-inline
+/*static*/
+NestedGenFilter*
+NestedGenFilter::parseExpression(TString const& _expr, unsigned* _nParsed/* = 0*/)
+{
+  TString expr(_expr.Strip(TString::kLeading));
+
+  bool invert(expr(0) == '!');
+  expr = expr.Remove(0, expr.Index("(") + 1).Strip(TString::kLeading);
+
+  unsigned nParsed(0);
+  GenFilter* content(GenFilter::parseExpression(expr, &nParsed));
+
+  expr = expr.Remove(0, nParsed).Strip(TString::kLeading);
+
+  if(expr(0) != ')')
+    throw std::runtime_error(("Syntax error in " + _expr).Data());
+
+  expr = expr.Remove(0, 1).Strip(TString::kLeading);
+
+  if(_nParsed) *_nParsed = _expr.Length() - expr.Length();
+
+  NestedGenFilter* nested(dynamic_cast<NestedGenFilter*>(content));
+  if(nested){
+    nested->setInvert(nested->invert() != invert);
+    return nested;
+  }
+
+  return new NestedGenFilter(content, invert);
+}
+
+
+DecayChainFilter::DecayChainFilter(DecayChain const& _chain) :
+  chain_(_chain)
+{
+}
+
+DecayChainFilter::~DecayChainFilter()
+{
+  for(unsigned iD(0); iD != chain_.size(); ++iD)
+    delete chain_[iD];
+}
+
 TString
-GenFilter::toString() const
+DecayChainFilter::toString() const
 {
   TString result("");
 
-  switch(type_){
-  case kAtomic:
-    for(unsigned iD(0); iD < decayChain_.size(); ++iD){
-      int pdgId(decayChain_[iD].pdgId);
-      TString pdgStr;
-      switch(pdgId){
-      case 100:
-        pdgStr = "j";
-	break;
-      case 500:
-        pdgStr = "b";
-	break;
-      case 0:
-	pdgStr = "*";
-	break;
-      default:
-        if(decayChain_[iD].chargeSensitive)
-          pdgStr = TString::Format("%+d", pdgId);
-        else
-          pdgStr = TString::Format("%d", pdgId);
-	break;
-      }
-
-      if(!decayChain_[iD].passIfMatch) result += "!";
-      result += pdgStr;
-
-      if(iD != decayChain_.size() - 1)
-        result += ">";
+  for(unsigned iD(0); iD < chain_.size(); ++iD){
+    int pdgId(chain_[iD]->pdgId);
+    TString pdgStr;
+    switch(pdgId){
+    case 100:
+      pdgStr = "j";
+      break;
+    case 500:
+      pdgStr = "b";
+      break;
+    case 0:
+      pdgStr = "*";
+      break;
+    default:
+      if(chain_[iD]->chargeSensitive)
+        pdgStr = TString::Format("%+d", pdgId);
+      else
+        pdgStr = TString::Format("%d", pdgId);
+      break;
     }
-    break;
-  case kNOT:
-    result = "!(" + subfilters_[0]->toString() + ")";
-    break;
-  case kOR:
-  case kAND:
-    for(unsigned iF(0); iF < subfilters_.size(); ++iF){
-      if(subfilters_[iF]->type_ != kAtomic) result += "(";
-      result += subfilters_[iF]->toString();
-      if(subfilters_[iF]->type_ != kAtomic) result += ")";
 
-      if(type_ == kAND && iF < subfilters_.size() - 1)
-        result += " && ";
-      else if(type_ == kOR && iF < subfilters_.size() - 1)
-        result += " || ";
-    }
-    break;
-  default:
-    break;
+    if(!chain_[iD]->passIfMatch) result += "!";
+    result += pdgStr;
+
+    if(iD != chain_.size() - 1)
+      result += ">";
   }
 
   return result;
 }
 
-inline
 bool
-GenFilter::pass(std::vector<PNode*> const& _rootNodes) const
+DecayChainFilter::pass(std::vector<PNode*> const& _rootNodes) const
 {
-  switch(type_){
-  case kAtomic:
-    if(decayChain_.size() == 0) return true;
-    return chainMatch_(0, _rootNodes);
-  case kNOT:
-    return !subfilters_[0]->pass(_rootNodes);
-  case kOR:
-  case kAND:
-    for(unsigned iF(0); iF < subfilters_.size(); ++iF){
-      if(subfilters_[iF]->pass(_rootNodes)){
-        if(type_ == kOR) return true;
-      }
-      else{
-        if(type_ == kAND) return false;
-      }
-    }
-
-    if(type_ == kAND) return true;
-    else return false;
-  case kTrue:
-    return true;
-  default:
-    return false;
-  }
+  return chainMatch_(0, _rootNodes);
 }
 
-inline
 bool
-GenFilter::chainMatch_(unsigned _decayStage, std::vector<PNode*> const& _list) const
+DecayChainFilter::chainMatch_(unsigned _decayStage, std::vector<PNode*> const& _list) const
 {
   enum MatchType {
     kOneToOne,
@@ -307,18 +327,18 @@ GenFilter::chainMatch_(unsigned _decayStage, std::vector<PNode*> const& _list) c
     nMatchType
   };
 
-  if(_decayStage == decayChain_.size()) return true;
+  if(_decayStage == chain_.size()) return true;
 
   if(_list.size() == 0) return false;
 
   MatchType type;
-  if(decayChain_[_decayStage].pdgId == 0) type = kAny;
-  else if(!decayChain_[_decayStage].passIfMatch) type = kVeto;
+  if(chain_[_decayStage]->pdgId == 0) type = kAny;
+  else if(!chain_[_decayStage]->passIfMatch) type = kVeto;
   else type = kOneToOne;
 
   if(type == kAny || type == kVeto) ++_decayStage;
 
-  DecayNode const& dnode(decayChain_[_decayStage]);
+  DecayNode const& dnode(*chain_[_decayStage]);
 
   for(unsigned iP(0); iP != _list.size(); ++iP){
     PNode& pnode(*_list[iP]);
@@ -339,7 +359,7 @@ GenFilter::chainMatch_(unsigned _decayStage, std::vector<PNode*> const& _list) c
         std::vector<std::vector<PNode*> > chain;
         std::vector<PNode*> allMatched(anyDecayMatch_(dnode, pnode, &chain));
         for(unsigned iM(0); iM != allMatched.size(); ++iM){
-          if(vetoMatch_(decayChain_[_decayStage - 1], chain[iM])) continue;
+          if(vetoMatch_(*chain_[_decayStage - 1], chain[iM])) continue;
           if(chainMatch_(_decayStage + 1, allMatched[iM]->daughters)) return true;
         }
       }
@@ -352,9 +372,8 @@ GenFilter::chainMatch_(unsigned _decayStage, std::vector<PNode*> const& _list) c
   return false;
 }
 
-inline
 bool
-GenFilter::oneToOneMatch_(DecayNode const& _dnode, PNode& _pnode) const
+DecayChainFilter::oneToOneMatch_(DecayNode const& _dnode, PNode& _pnode) const
 {
   int id(_pnode.pdgId);
   int absId(std::abs(id));
@@ -367,9 +386,8 @@ GenFilter::oneToOneMatch_(DecayNode const& _dnode, PNode& _pnode) const
   return false;
 }
 
-inline
 std::vector<PNode*>
-GenFilter::anyDecayMatch_(DecayNode const& _dnode, PNode& _pnode, std::vector<std::vector<PNode*> >* _chain/* = 0*/) const
+DecayChainFilter::anyDecayMatch_(DecayNode const& _dnode, PNode& _pnode, std::vector<std::vector<PNode*> >* _chain/* = 0*/) const
 {
   std::vector<PNode*> allMatches;
 
@@ -398,13 +416,83 @@ GenFilter::anyDecayMatch_(DecayNode const& _dnode, PNode& _pnode, std::vector<st
   return allMatches;
 }
 
-inline
 bool
-GenFilter::vetoMatch_(DecayNode const& _dnode, std::vector<PNode*> const& _chain) const
+DecayChainFilter::vetoMatch_(DecayNode const& _dnode, std::vector<PNode*> const& _chain) const
 {
   for(unsigned iC(0); iC != _chain.size(); ++iC)
     if(oneToOneMatch_(_dnode, *_chain[iC])) return true;
   return false;
+}
+
+
+NestedGenFilter::NestedGenFilter(GenFilter const* _content, bool _invert) :
+  content_(_content),
+  invert_(_invert)
+{
+}
+
+NestedGenFilter::~NestedGenFilter()
+{
+}
+
+TString
+NestedGenFilter::toString() const
+{
+  TString result("");
+
+  if(invert_) result += "!";
+  result += "(";
+  result += content_->toString();
+  result += ")";
+
+  return result;
+}
+
+bool
+NestedGenFilter::pass(std::vector<PNode*> const& _rootNodes) const
+{
+  bool result(content_->pass(_rootNodes));
+  return invert_ ? !result : result;
+}
+
+
+ChainedGenFilter::ChainedGenFilter(Operator _operator) :
+  terms_(0),
+  operator_(_operator)
+{
+}
+
+ChainedGenFilter::~ChainedGenFilter()
+{
+  for(unsigned iT(0); iT != terms_.size(); ++iT)
+    delete terms_[iT];
+}
+
+TString
+ChainedGenFilter::toString() const
+{
+  TString result("");
+
+  for(unsigned iT(0); iT != terms_.size(); ++iT){
+    result += terms_[iT]->toString();
+    if(iT != terms_.size() - 1){
+      if(operator_ == kOR) result += " || ";
+      else result += " && ";
+    }
+  }
+
+  return result;
+}
+
+bool
+ChainedGenFilter::pass(std::vector<PNode*> const& _rootNodes) const
+{
+  unsigned iT(0);
+  for(; iT != terms_.size(); ++iT){
+    if(operator_ == kOR && terms_[iT]->pass(_rootNodes)) break;
+    else if(operator_ == kAND && !terms_[iT]->pass(_rootNodes)) break;
+  }
+  return (operator_ == kOR && iT != terms_.size()) || (operator_ == kAND && iT == terms_.size());
 }
 
 #endif
