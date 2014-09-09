@@ -28,6 +28,8 @@ private:
 bool
 GenDecayFilterRA3::pass(susy::Event const& _event)
 {
+  filter_->reset();
+  
   susy::ParticleCollection const& particles(_event.genParticles);
 
   std::vector<PNode> allNodes(particles.size());

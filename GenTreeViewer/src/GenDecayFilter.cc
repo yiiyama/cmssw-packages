@@ -44,6 +44,8 @@ GenDecayFilter::filter(edm::Event& _event, const edm::EventSetup&)
 {
   if(_event.isRealData()) return true;
 
+  filter_->reset();
+
   std::vector<PNode*> rootNodes;
 
   if(useGenParticles_){
