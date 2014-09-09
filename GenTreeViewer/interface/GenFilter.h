@@ -28,7 +28,7 @@ struct DecayNode {
   bool passIfMatch;
 };
 
-typedef std::vector<DecayNode const*> DecayChain;
+typedef std::vector<const DecayNode*> DecayChain;
 
 class GenFilter {
  public:
@@ -106,7 +106,7 @@ class ChainedGenFilter : public GenFilter {
   Operator getOperator() const { return operator_; }
 
  protected:
-  std::vector<GenFilter const*> terms_;
+  std::vector<const GenFilter*> terms_;
   Operator operator_;
 };
 
@@ -425,7 +425,7 @@ DecayChainFilter::oneToOneMatch_(DecayNode const& _dnode, PNode& _pnode) const
   int absId(std::abs(id));
 
   if(_dnode.pdgId == 500 && (absId == 5 || (absId / 100) % 10 == 5 || (absId / 1000) % 10 == 5)) return true;
-  if(_dnode.pdgId == 100 && (absId / 100) % 10 != 0) return true;
+  if(_dnode.pdgId == 100 && (absId == 21 || absId < 5 || (absId / 100) % 10 != 0)) return true;
   if(_dnode.chargeSensitive && _dnode.pdgId == id) return true;
   if(!_dnode.chargeSensitive && _dnode.pdgId == absId) return true;
 
