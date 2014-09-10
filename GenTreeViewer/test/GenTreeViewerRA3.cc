@@ -10,6 +10,10 @@
 
 #include "../interface/PNode.h"
 
+double PNode::matchEta = 0.;
+double PNode::matchPhi = 0.;
+double PNode::matchDR = 0.;
+
 void
 viewGenTreeRA3(susy::Event const& _event, double _ptThreshold = 0., bool _showMass = false)
 {

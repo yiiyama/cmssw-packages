@@ -8,18 +8,28 @@
 
 class GenDecayFilterRA3 {
 public:
-  GenDecayFilterRA3(TString const& _filterExpr) : filter_(_filterExpr) {}
-  ~GenDecayFilterRA3() {}
+  GenDecayFilterRA3(TString const& _filterExpr) :
+    filter_(0)
+  {
+    TString expr(_filterExpr);
+    filter_ = GenFilter::parseExpression(expr);
+  }
+  ~GenDecayFilterRA3()
+  {
+    delete filter_;
+  }
 
   bool pass(susy::Event const&);
 
 private:
-  GenFilter filter_;
+  GenFilter* filter_;
 };
 
 bool
 GenDecayFilterRA3::pass(susy::Event const& _event)
 {
+  filter_->reset();
+  
   susy::ParticleCollection const& particles(_event.genParticles);
 
   std::vector<PNode> allNodes(particles.size());
@@ -45,5 +55,5 @@ GenDecayFilterRA3::pass(susy::Event const& _event)
     }
   }
 
-  return filter_.pass(rootNodes);
+  return filter_->pass(rootNodes);
 }

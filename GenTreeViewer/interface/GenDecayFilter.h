@@ -37,15 +37,16 @@ namespace edm {
 class GenDecayFilter : public edm::EDFilter {
 public:
   explicit GenDecayFilter(edm::ParameterSet const&);
-  ~GenDecayFilter() {}
+  ~GenDecayFilter();
 
   static void fillDescriptions(edm::ConfigurationDescriptions&);
 
 private:
   virtual bool filter(edm::Event&, edm::EventSetup const&);
       
-  edm::InputTag genParticlesTag_;
-  GenFilter filter_;
+  edm::InputTag sourceTag_;
+  bool useGenParticles_;
+  GenFilter* filter_;
   bool veto_;
 };
 
