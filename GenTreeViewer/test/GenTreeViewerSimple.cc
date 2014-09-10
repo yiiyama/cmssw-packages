@@ -55,13 +55,13 @@ viewGenTreeSimple(TTree* _eventVars, long _iEntry = 0, bool _showMass = false)
   if(!_eventVars) return;
 
   unsigned size;
-  unsigned short status[256];
-  short motherIndex[256];
-  int pdgId[256];
-  float pt[256];
-  float eta[256];
-  float phi[256];
-  float mass[256];
+  unsigned short status[2048];
+  short motherIndex[2048];
+  int pdgId[2048];
+  float pt[2048];
+  float eta[2048];
+  float phi[2048];
+  float mass[2048];
 
   _eventVars->ResetBranchAddresses();
 
