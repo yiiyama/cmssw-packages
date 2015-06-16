@@ -3,5 +3,6 @@
 <use name="FWCore/ParameterSet"/>
 <use name="DataFormats/EgammaCandidates"/>
 <use name="DataFormats/MuonReco"/>
+<use name="DataFormats/EcalDigi"/>
 <flags EDM_PLUGIN="1"/>
 
