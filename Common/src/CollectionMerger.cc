@@ -1,27 +1,3 @@
-// -*- C++ -*-
-//
-// Package:    CollectionMerger
-// Class:      CollectionMerger
-// 
-/**\class CollectionMerger CollectionMerger.cc Toolset/CollectionMerger/src/CollectionMerger.cc
-
- Description: [one line class summary]
-
- Implementation:
-     [Notes on implementation]
-*/
-//
-// Original Author:  Yutaro Iiyama,512 1-005,+41227670489,
-//         Created:  Thu Jun 21 16:48:38 CEST 2012
-// $Id: CollectionMerger.cc,v 1.1 2012/10/06 09:09:21 yiiyama Exp $
-//
-//
-
-
-// system include files
-#include <memory>
-
-// user include files
 #include "FWCore/Framework/interface/Frameworkfwd.h"
 #include "FWCore/Framework/interface/EDProducer.h"
 
@@ -32,9 +8,10 @@
 
 #include "FWCore/Utilities/interface/Exception.h"
 #include "FWCore/Utilities/interface/InputTag.h"
+#include "FWCore/Utilities/interface/EDGetToken.h"
 
 #include "DataFormats/Common/interface/Handle.h"
-#include "DataFormats/Common/interface/RefToBaseVector.h"
+#include "DataFormats/Common/interface/Ptr.h"
 
 #include "DataFormats/Candidate/interface/Candidate.h"
 #include "DataFormats/Candidate/interface/CandidateFwd.h"
@@ -45,77 +22,53 @@
 #include "DataFormats/MuonReco/interface/Muon.h"
 #include "DataFormats/MuonReco/interface/MuonFwd.h"
 
-//
-// class declaration
-//
-
 class CollectionMerger : public edm::EDProducer {
-   public:
-      explicit CollectionMerger(const edm::ParameterSet&);
-      ~CollectionMerger();
+public:
+  explicit CollectionMerger(edm::ParameterSet const&);
+  ~CollectionMerger();
 
-      static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
+private:
+  typedef edm::View<reco::Candidate> CandidateView;
+  
+  void produce(edm::Event&, edm::EventSetup const&);
 
-   private:
-      virtual void beginJob() ;
-      virtual void produce(edm::Event&, const edm::EventSetup&);
-      virtual void endJob() ;
-      
-      virtual void beginRun(edm::Run&, edm::EventSetup const&);
-      virtual void endRun(edm::Run&, edm::EventSetup const&);
-      virtual void beginLuminosityBlock(edm::LuminosityBlock&, edm::EventSetup const&);
-      virtual void endLuminosityBlock(edm::LuminosityBlock&, edm::EventSetup const&);
-
-      // ----------member data ---------------------------
-
-  std::vector<edm::InputTag> src_;
+  std::vector<edm::EDGetTokenT<CandidateView> > viewTokens_;
   std::string colType_;
   //  bool clone_;
   unsigned maxOutputSize_;
 };
 
-//
-// constants, enums and typedefs
-//
-
-
-//
-// static data member definitions
-//
-
-//
-// constructors and destructor
-//
-CollectionMerger::CollectionMerger(const edm::ParameterSet& iConfig) :
-  src_(iConfig.getParameter<std::vector<edm::InputTag> >("src")),
+CollectionMerger::CollectionMerger(edm::ParameterSet const& iConfig) :
   colType_(iConfig.getParameter<std::string>("type")),
   //  clone_(false),
   maxOutputSize_(-1)
 {
+  for (auto&& tag : iConfig.getParameter<std::vector<edm::InputTag> >("src"))
+    viewTokens_.push_back(consumes<CandidateView>(tag));
 
-//   if(iConfig.existsAs<bool>("clone"))
-//     clone_ = iConfig.getParameter<bool>("clone");
+  //   if(iConfig.existsAs<bool>("clone"))
+  //     clone_ = iConfig.getParameter<bool>("clone");
 
   if(iConfig.existsAs<int>("maxOutputSize"))
     maxOutputSize_ = iConfig.getParameter<int>("maxOutputSize");
 
   if(colType_ == "Photon"){
-//     if(clone_)
+    //     if(clone_)
     produces<reco::PhotonCollection>();
-//     else
-//       produces<edm::RefToBaseVector<reco::Photon> >();
+    //     else
+    //       produces<edm::RefToBaseVector<reco::Photon> >();
   }
   else if(colType_ == "Electron"){
-//     if(clone_)
+    //     if(clone_)
     produces<reco::GsfElectronCollection>();
-//     else
-//       produces<reco::GsfElectronRefVector>();
+    //     else
+    //       produces<reco::GsfElectronRefVector>();
   }
   else if(colType_ == "Muon"){
-//     if(clone_)
+    //     if(clone_)
     produces<reco::MuonCollection>();
-//     else
-//       produces<reco::MuonRefVector>();
+    //     else
+    //       produces<reco::MuonRefVector>();
   }
   else
     throw cms::Exception("Configuration") << colType_;
@@ -126,127 +79,93 @@ CollectionMerger::~CollectionMerger()
 {
 }
 
-
-//
-// member functions
-//
-
-// ------------ method called to produce the data  ------------
 void
-CollectionMerger::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
+CollectionMerger::produce(edm::Event& iEvent, edm::EventSetup const&)
 {
   using namespace edm;
 
-  RefToBaseVector<reco::Candidate> merged;
+  std::vector<reco::CandidatePtr> merged;
 
-  for(unsigned iS(0); iS < src_.size(); iS++){
-    RefToBaseVector<reco::Candidate> const* vSrc(0);
+  for (auto&& token : viewTokens_) {
+    std::vector<reco::CandidatePtr> vSrc;
 
-    Handle<View<reco::Candidate> > srcHndl;
-    if(iEvent.getByLabel(src_[iS], srcHndl))
-      vSrc = &(srcHndl->refVector());
+    Handle<CandidateView> srcHndl;
+    if(iEvent.getByToken(token, srcHndl))
+      vSrc = srcHndl->ptrs();
     else{
-      Handle<RefToBaseVector<reco::Candidate> > bsrcHndl;
-      if(iEvent.getByLabel(src_[iS], bsrcHndl))
-        vSrc = bsrcHndl.product();
-      else
-        throw cms::Exception("ProductNotFound") << src_[iS];
+      // Handle<RefToBaseVector<reco::Candidate> > bsrcHndl;
+      // if(iEvent.getByLabel(src_[iS], bsrcHndl))
+      //   vSrc = bsrcHndl.product();
+      // else
+      //   throw cms::Exception("ProductNotFound") << src_[iS];
+      throw cms::Exception("ProductNotFound");
     }
 
-    for(RefToBaseVector<reco::Candidate>::const_iterator cItr(vSrc->begin()); cItr != vSrc->end(); ++cItr){
-      bool counted(false);
-      for(RefToBaseVector<reco::Candidate>::const_iterator it(merged.begin()); it != merged.end(); ++it){
-        if(it->get() == cItr->get()){
-          counted = true;
+    for (auto&& sPtr : vSrc) {
+      auto mItr(merged.begin());
+      for (; mItr != merged.end(); ++mItr) {
+        if (mItr->get() == sPtr.get())
           break;
-        }
       }
-      if(counted) continue;
+      if (mItr != merged.end())
+        continue;
 
-      merged.push_back(*cItr);
+      merged.push_back(sPtr);
     }
   }
 
   if(colType_ == "Photon"){
-//     if(clone_){
+    //     if(clone_){
     std::auto_ptr<reco::PhotonCollection> output(new reco::PhotonCollection);
     unsigned iOut(0);
-    for(RefToBaseVector<reco::Candidate>::const_iterator eItr(merged.begin()); eItr != merged.end() && iOut != maxOutputSize_; ++eItr, iOut++)
-      output->push_back(*(static_cast<reco::Photon const*>(eItr->get())));
-    iEvent.put(output);
-//    }
-//    else{
-//      std::auto_ptr<RefToBaseVector<reco::Photon> > output(new RefToBaseVector<>);
-//      unsigned iOut(0);
-//      for(reco::PhotonRefVector::const_iterator eItr(merged.begin()); eItr != merged.end() && iOut != maxOutputSize_; ++eItr, iOut++)
-//        output->push_back(*eItr);
-//      iEvent.put(output);
+    for (auto&& mPtr : merged) {
+      auto* photon(dynamic_cast<reco::Photon const*>(mPtr.get()));
+      if (photon)
+        output->push_back(*photon);
 
-//       std::auto_
-//       produces<reco::PhotonCollection>();
-//     else
-//       produces<edm::RefToBaseVector<reco::Photon> >();
+      if (++iOut == maxOutputSize_)
+        break;
+    }
+    iEvent.put(output);
+    //    }
+    //    else{
+    //      std::auto_ptr<RefToBaseVector<reco::Photon> > output(new RefToBaseVector<>);
+    //      unsigned iOut(0);
+    //      for(reco::PhotonRefVector::const_iterator eItr(merged.begin()); eItr != merged.end() && iOut != maxOutputSize_; ++eItr, iOut++)
+    //        output->push_back(*eItr);
+    //      iEvent.put(output);
+
+    //       std::auto_
+    //       produces<reco::PhotonCollection>();
+    //     else
+    //       produces<edm::RefToBaseVector<reco::Photon> >();
   }
   else if(colType_ == "Electron"){
     std::auto_ptr<reco::GsfElectronCollection> output(new reco::GsfElectronCollection);
     unsigned iOut(0);
-    for(RefToBaseVector<reco::Candidate>::const_iterator eItr(merged.begin()); eItr != merged.end() && iOut != maxOutputSize_; ++eItr, iOut++)
-      output->push_back(*(static_cast<reco::GsfElectron const*>(eItr->get())));
+    for (auto&& mPtr : merged) {
+      auto* electron(dynamic_cast<reco::GsfElectron const*>(mPtr.get()));
+      if (electron)
+        output->push_back(*electron);
+
+      if (++iOut == maxOutputSize_)
+        break;
+    }
     iEvent.put(output);
   }
   else if(colType_ == "Muon"){
     std::auto_ptr<reco::MuonCollection> output(new reco::MuonCollection);
     unsigned iOut(0);
-    for(RefToBaseVector<reco::Candidate>::const_iterator eItr(merged.begin()); eItr != merged.end() && iOut != maxOutputSize_; ++eItr, iOut++)
-      output->push_back(*(static_cast<reco::Muon const*>(eItr->get())));
+    for (auto&& mPtr : merged) {
+      auto* muon(dynamic_cast<reco::Muon const*>(mPtr.get()));
+      if (muon)
+        output->push_back(*muon);
+
+      if (++iOut == maxOutputSize_)
+        break;
+    }
     iEvent.put(output);
   }
 }
 
-// ------------ method called once each job just before starting event loop  ------------
-void 
-CollectionMerger::beginJob()
-{
-}
-
-// ------------ method called once each job just after ending the event loop  ------------
-void 
-CollectionMerger::endJob() {
-}
-
-// ------------ method called when starting to processes a run  ------------
-void 
-CollectionMerger::beginRun(edm::Run&, edm::EventSetup const&)
-{
-}
-
-// ------------ method called when ending the processing of a run  ------------
-void 
-CollectionMerger::endRun(edm::Run&, edm::EventSetup const&)
-{
-}
-
-// ------------ method called when starting to processes a luminosity block  ------------
-void 
-CollectionMerger::beginLuminosityBlock(edm::LuminosityBlock&, edm::EventSetup const&)
-{
-}
-
-// ------------ method called when ending the processing of a luminosity block  ------------
-void 
-CollectionMerger::endLuminosityBlock(edm::LuminosityBlock&, edm::EventSetup const&)
-{
-}
-
-// ------------ method fills 'descriptions' with the allowed parameters for the module  ------------
-void
-CollectionMerger::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
-  //The following says we do not know what parameters are allowed so do no validation
-  // Please change this to state exactly what you do use, even if it is no parameters
-  edm::ParameterSetDescription desc;
-  desc.setUnknown();
-  descriptions.addDefault(desc);
-}
-
-//define this as a plug-in
 DEFINE_FWK_MODULE(CollectionMerger);
