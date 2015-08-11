@@ -2,6 +2,7 @@
 #define ToolsetGenTreeViewerPNode_h
 
 #include <vector>
+#include <bitset>
 #include <sstream>
 #include <string>
 #include <iomanip>
@@ -13,6 +14,7 @@ struct PNode {
   std::vector<PNode*> daughters;
   int pdgId;
   int status;
+  std::bitset<15> statusBits;
   double mass;
   double pt;
   double eta;
@@ -23,14 +25,49 @@ struct PNode {
   double energy;
   bool ownDaughters;
 
+  std::string info;
+
   static double matchEta;
   static double matchPhi;
   static double matchDR;
 
-  PNode() : mother(0), daughters(0), pdgId(0), status(0),
+  enum MomentumDispMode {
+    kShowAllP,
+    kShowFinalP,
+    kNoP,
+    nMomentumDispModes
+  };
+
+  enum MassDispMode {
+    kShowAllM,
+    kShowHardScatM,
+    kNoM,
+    nMassDispModes
+  };
+
+  enum StatusBits {
+    kIsPrompt = 0,
+    kIsDecayedLeptonHadron,
+    kIsTauDecayProduct,
+    kIsPromptTauDecayProduct,
+    kIsDirectTauDecayProduct,
+    kIsDirectPromptTauDecayProduct,
+    kIsDirectHadronDecayProduct,
+    kIsHardProcess,
+    kFromHardProcess,
+    kIsHardProcessTauDecayProduct,
+    kIsDirectHardProcessTauDecayProduct,
+    kFromHardProcessBeforeFSR,
+    kIsFirstCopy,
+    kIsLastCopy,
+    kIsLastCopyBeforeFSR,
+    nStatusBits
+  };
+
+  PNode() : mother(0), daughters(0), pdgId(0), status(0), statusBits(),
             mass(0.), pt(0.), eta(0.), phi(0.),
             px(0.), py(0.), pz(0.), energy(0.),
-            ownDaughters(false) {}
+            ownDaughters(false), info("") {}
   ~PNode()
   {
     if(ownDaughters){
@@ -44,6 +81,7 @@ struct PNode {
     daughters = _rhs.daughters;
     pdgId = _rhs.pdgId;
     status = _rhs.status;
+    statusBits = _rhs.statusBits;
     mass = _rhs.mass;
     pt = _rhs.pt;
     eta = _rhs.eta;
@@ -52,19 +90,23 @@ struct PNode {
     py = _rhs.py;
     pz = _rhs.pz;
     energy = _rhs.energy;
+    info = "";
     return *this;
   }
-  std::string print(bool _showMomentum = true, bool _showMass = false, bool _usePtEtaPhi = true)
+  void generateInfo(MomentumDispMode _pMode = kShowAllP, MassDispMode _mMode = kShowAllM, bool _usePtEtaPhi = true)
   {
+    if(info != "")
+      return;
+
     using namespace std;
 
     stringstream ss;
-    ss << "+" << setw(9) << pdgId;
+    ss << setw(9) << pdgId;
 
-    if(_showMass)
+    if(_mMode == kShowAllM || (_mMode == kShowHardScatM && statusBits[kIsHardProcess]))
       ss << " [" << setw(6) << fixed << setprecision(2) << mass << "]";
 
-    if(_showMomentum){
+    if(_pMode == kShowAllP || (_pMode == kShowFinalP && status == 1)){
       if(_usePtEtaPhi){
         ss << " (";
         ss << setw(5) << fixed << setprecision(pt < 1000. ? 1 : 0) << pt;
@@ -101,30 +143,67 @@ struct PNode {
     }
     else{
       ss << " " << status << " ";
-
-      string spaceHolder(ss.str().length() - 1, ' ');
-
-      for(unsigned iD(0); iD < daughters.size(); iD++){
-        string line;
-        if(iD > 0){
-          ss << endl;
-          PNode* node(this);
-          while(node){
-            PNode* motherNode(node->mother);
-            bool isLastChild(!motherNode);
-            if(motherNode){
-              std::vector<PNode*>& siblings(motherNode->daughters);
-              std::vector<PNode*>::iterator nItr(std::find(siblings.begin(), siblings.end(), node));
-              isLastChild = (++nItr == siblings.end());
-            }
-            line = (isLastChild ? " " : "|") + spaceHolder + line;
-
-            node = motherNode;
-          }
+      bool first(true);
+      for(unsigned iB(0); iB != nStatusBits; ++iB){
+        if(!statusBits[iB])
+          continue;
+        if(first){
+          ss << "{";
+          first = false;
         }
-        ss << line << daughters[iD]->print(_showMomentum, _showMass, _usePtEtaPhi);
+        else
+          ss << ",";
+        ss << iB;
+      }
+      if(!first)
+        ss << "}";
+    }
+
+    info = ss.str();
+
+    for(auto* daughter : daughters)
+      daughter->generateInfo();
+  }
+  std::string print(std::vector<std::string>* spacers = 0, bool firstDaughter = true, bool lastDaughter = true)
+  {
+    using namespace std;
+
+    stringstream ss;
+
+    if(spacers && !firstDaughter){
+      for(string& s : *spacers)
+        ss << s;
+    }
+
+    ss << "+ " << info << " ";
+
+    string spacer(info.size() + 1, ' ');
+    if(lastDaughter)
+      spacer = "  " + spacer;
+    else
+      spacer = "| " + spacer;
+
+    if(spacers)
+      spacers->push_back(spacer);
+    else
+      spacers = new vector<string>(1, spacer);
+
+    if(daughters.size() != 0){
+      for(unsigned iD(0); iD != daughters.size(); ++iD)
+        ss << daughters[iD]->print(spacers, iD == 0, iD == daughters.size() - 1);
+    }
+    else{
+      ss << endl;
+      if(lastDaughter && spacers){
+        for(string& s : *spacers)
+          ss << s;
+        ss << endl;
       }
     }
+
+    spacers->pop_back();
+    if(spacers->size() == 0)
+      delete spacers;
 
     return ss.str();
   }
@@ -150,6 +229,42 @@ struct PNode {
       if(std::abs(mother->pdgId) == _pdgId) return true;
     }
     return mother->hasAncestor(_pdgId, _signed);
+  }
+  void cleanDaughters(bool _doDelete = false)
+  {
+    int motherPdg(std::abs(pdgId));
+
+    for(unsigned iD(0); iD < daughters.size(); ++iD){
+      PNode* dnode(daughters[iD]);
+      dnode->cleanDaughters();
+
+      unsigned nGD(dnode->daughters.size());
+      bool intermediateTerminal(nGD == 0 && dnode->status != 1);
+      bool noDecay(nGD == 1 && dnode->pdgId == dnode->daughters.front()->pdgId);
+      int pdg(std::abs(dnode->pdgId));
+      bool hadronicIntermediate(dnode->status != 1 &&
+                                ((pdg / 100) % 10 != 0 || pdg == 21 || (pdg > 80 && pdg < 101)));
+      bool firstHeavyHadron((motherPdg / 1000) % 10 < 4 && (motherPdg / 100) % 10 < 4 &&
+                            ((pdg / 1000) % 10 >= 4 || (pdg / 100) % 10 >= 4));
+      bool lightDecayingToLight(false);
+      if(pdg < 4){
+        unsigned iGD(0);
+        for(; iGD < nGD; ++iGD)
+          if(std::abs(dnode->daughters[iGD]->pdgId) > 3) break;
+        lightDecayingToLight = iGD == nGD;
+      }
+
+      if(intermediateTerminal || noDecay || (hadronicIntermediate && !firstHeavyHadron) || lightDecayingToLight){
+        for(unsigned iGD(0); iGD < nGD; ++iGD)
+          dnode->daughters[iGD]->mother = this;
+        daughters.erase(daughters.begin() + iD);
+        daughters.insert(daughters.begin() + iD, dnode->daughters.begin(), dnode->daughters.end());
+        dnode->daughters.clear();
+        if(_doDelete)
+          delete dnode;
+        --iD;
+      }
+    }
   }
 };
 

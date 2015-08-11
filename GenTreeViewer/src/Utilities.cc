@@ -21,6 +21,7 @@ setDaughters(reco::GenParticle const* _gen, std::map<reco::GenParticle const*, P
   PNode* node(new PNode);
   node->pdgId = _gen->pdgId();
   node->status = _gen->status();
+  node->statusBits = _gen->statusFlags().flags_;
   node->mass = _gen->mass();
   node->pt = _gen->pt();
   node->eta = _gen->eta();
@@ -145,42 +146,4 @@ setDaughters(HepMC::GenParticle const* _gen, std::map<HepMC::GenParticle const*,
   }
 
   return node;
-}
-
-void
-cleanDaughters(PNode* node)
-{
-  int motherPdg(std::abs(node->pdgId));
-  std::vector<PNode*>& daughters(node->daughters);
-
-  for(unsigned iD(0); iD < daughters.size(); ++iD){
-    PNode* dnode(daughters[iD]);
-    cleanDaughters(dnode);
-
-    unsigned nGD(dnode->daughters.size());
-    bool intermediateTerminal(nGD == 0 && dnode->status != 1);
-    bool noDecay(nGD == 1 && dnode->pdgId == dnode->daughters.front()->pdgId);
-    int pdg(std::abs(dnode->pdgId));
-    bool hadronicIntermediate(dnode->status != 1 &&
-                              ((pdg / 100) % 10 != 0 || pdg == 21 || (pdg > 80 && pdg < 101)));
-    bool firstHeavyHadron((motherPdg / 1000) % 10 < 4 && (motherPdg / 100) % 10 < 4 &&
-                          ((pdg / 1000) % 10 >= 4 || (pdg / 100) % 10 >= 4));
-    bool lightDecayingToLight(false);
-    if(pdg < 4){
-      unsigned iGD(0);
-      for(; iGD < nGD; ++iGD)
-        if(std::abs(dnode->daughters[iGD]->pdgId) > 3) break;
-      lightDecayingToLight = iGD == nGD;
-    }
-
-    if(intermediateTerminal || noDecay || (hadronicIntermediate && !firstHeavyHadron) || lightDecayingToLight){
-      for(unsigned iGD(0); iGD < nGD; ++iGD)
-        dnode->daughters[iGD]->mother = node;
-      daughters.erase(daughters.begin() + iD);
-      daughters.insert(daughters.begin() + iD, dnode->daughters.begin(), dnode->daughters.end());
-      dnode->daughters.clear();
-      delete dnode;
-      --iD;
-    }
-  }
 }

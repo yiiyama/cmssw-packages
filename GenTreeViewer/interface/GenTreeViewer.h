@@ -23,6 +23,8 @@
 
 #include "FWCore/Utilities/interface/InputTag.h"
 
+#include "PNode.h"
+
 namespace edm {
   class ParameterSet;
   class ConfigurationDescriptions;
@@ -41,8 +43,8 @@ class GenTreeViewer : public edm::EDAnalyzer {
   virtual void analyze(edm::Event const&, edm::EventSetup const&);
 
   edm::InputTag genParticlesTag_;
-  bool showMomentum_;
-  bool showMass_;
+  PNode::MomentumDispMode pMode_;
+  PNode::MassDispMode mMode_;
   bool usePtEtaPhi_;
   int cleaningMode_;
   float minPt_;

@@ -85,7 +85,7 @@ GenDecayFilter::filter(edm::Event& _event, const edm::EventSetup&)
   }
 
   for(unsigned iN(0); iN != rootNodes.size(); iN++)
-    cleanDaughters(rootNodes[iN]);
+    rootNodes[iN]->cleanDaughters();
 
   bool pass(filter_->pass(rootNodes));
   if(veto_) pass = !pass;
