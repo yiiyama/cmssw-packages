@@ -103,7 +103,7 @@ struct PNode {
     stringstream ss;
     ss << setw(9) << pdgId;
 
-    if(_mMode == kShowAllM || (_mMode == kShowHardScatM && statusBits[kIsHardProcess]))
+    if(_mMode == kShowAllM || (_mMode == kShowHardScatM && (statusBits[kIsHardProcess] || statusBits[kFromHardProcess])))
       ss << " [" << setw(6) << fixed << setprecision(2) << mass << "]";
 
     if(_pMode == kShowAllP || (_pMode == kShowFinalP && status == 1)){
@@ -162,7 +162,7 @@ struct PNode {
     info = ss.str();
 
     for(auto* daughter : daughters)
-      daughter->generateInfo();
+      daughter->generateInfo(_pMode, _mMode, _usePtEtaPhi);
   }
   std::string print(std::vector<std::string>* spacers = 0, bool firstDaughter = true, bool lastDaughter = true)
   {

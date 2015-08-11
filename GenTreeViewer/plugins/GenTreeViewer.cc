@@ -19,8 +19,8 @@
 
 GenTreeViewer::GenTreeViewer(edm::ParameterSet const& _ps) :
   genParticlesTag_(_ps.getUntrackedParameter<edm::InputTag>("genParticlesTag", edm::InputTag("genParticles"))),
-  pMode_(PNode::nMomentumDispModes),
-  mMode_(PNode::nMassDispModes),
+  pMode_(PNode::kNoP),
+  mMode_(PNode::kNoM),
   usePtEtaPhi_(_ps.getUntrackedParameter<bool>("usePtEtaPhi", true)),
   cleaningMode_(_ps.getUntrackedParameter<int>("cleaningMode", 1)),
   minPt_(_ps.getUntrackedParameter<double>("minPt", 2.))
@@ -45,16 +45,16 @@ GenTreeViewer::GenTreeViewer(edm::ParameterSet const& _ps) :
 
   if(_ps.existsAs<bool>("showMass", false)){
     if(_ps.getUntrackedParameter<bool>("showMass"))
-      pMode_ = PNode::kShowAllP;
+      mMode_ = PNode::kShowAllM;
   }
   else if(_ps.existsAs<std::string>("showMass", false)){
     std::string showMass(_ps.getUntrackedParameter<std::string>("showMass"));
     if(showMass == "All")
-      pMode_ = PNode::kShowAllP;
+      mMode_ = PNode::kShowAllM;
     else if(showMass == "HardScat")
-      pMode_ = PNode::kShowFinalP;
+      mMode_ = PNode::kShowHardScatM;
     else if(showMass == "None")
-      pMode_ = PNode::kNoP;
+      mMode_ = PNode::kNoM;
     else{
       std::cerr << "Unrecognized showMass value " << showMass << std::endl;
       throw std::runtime_error("Configuration");
