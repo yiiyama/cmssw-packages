@@ -84,8 +84,9 @@ GenTreeViewer::analyze(edm::Event const& _event, edm::EventSetup const&)
     std::cout << "=== FULL DECAY TREE ===" << std::endl << std::endl;
     for(unsigned iN(0); iN < rootNodes.size(); iN++){
       rootNodes[iN]->generateInfo(pMode_, mMode_, usePtEtaPhi_);
-      std::cout << rootNodes[iN]->print() << std::endl;
+      std::cout << rootNodes[iN]->print();
     }
+    std::cout << std::endl;
   }
 
   if(cleaningMode_ == 1 || cleaningMode_ == 2){
@@ -93,10 +94,10 @@ GenTreeViewer::analyze(edm::Event const& _event, edm::EventSetup const&)
     for(unsigned iN(0); iN < rootNodes.size(); iN++){
       rootNodes[iN]->cleanDaughters();
       rootNodes[iN]->generateInfo(pMode_, mMode_, usePtEtaPhi_);
-      std::cout << rootNodes[iN]->print() << std::endl;
+      std::cout << rootNodes[iN]->print();
     }
+    std::cout << std::endl;
   }
-  std::cout << std::endl;
 
   for(unsigned iN(0); iN != rootNodes.size(); ++iN)
     delete rootNodes[iN];
