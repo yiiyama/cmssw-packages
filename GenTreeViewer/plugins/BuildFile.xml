@@ -1,0 +1,9 @@
+<use name="FWCore/Framework"/>
+<use name="FWCore/PluginManager"/>
+<use name="FWCore/ParameterSet"/>
+<use name="SimDataFormats/GeneratorProducts"/>
+<use name="GeneratorInterface/Pythia6Interface"/>
+<use name="Toolset/GenTreeViewer"/>
+<library file="*.cc" name="ToolsetGenTreeViewerPlugins">
+   <flags EDM_PLUGIN="1"/>
+</library>

@@ -12,17 +12,54 @@
 #include "DataFormats/HepMCCandidate/interface/GenParticle.h"
 #include "DataFormats/HepMCCandidate/interface/GenParticleFwd.h"
 
-#include "../interface/PNode.h"
 #include "../interface/Utilities.h"
+
+#include <iostream>
+#include <stdexcept>
 
 GenTreeViewer::GenTreeViewer(edm::ParameterSet const& _ps) :
   genParticlesTag_(_ps.getUntrackedParameter<edm::InputTag>("genParticlesTag", edm::InputTag("genParticles"))),
-  showMomentum_(_ps.getUntrackedParameter<bool>("showMomentum", true)),
-  showMass_(_ps.getUntrackedParameter<bool>("showMass", true)),
+  pMode_(PNode::kNoP),
+  mMode_(PNode::kNoM),
   usePtEtaPhi_(_ps.getUntrackedParameter<bool>("usePtEtaPhi", true)),
   cleaningMode_(_ps.getUntrackedParameter<int>("cleaningMode", 1)),
   minPt_(_ps.getUntrackedParameter<double>("minPt", 2.))
 {
+  if(_ps.existsAs<bool>("showMomentum", false)){
+    if(_ps.getUntrackedParameter<bool>("showMomentum"))
+      pMode_ = PNode::kShowAllP;
+  }
+  else if(_ps.existsAs<std::string>("showMomentum", false)){
+    std::string showMomentum(_ps.getUntrackedParameter<std::string>("showMomentum"));
+    if(showMomentum == "All")
+      pMode_ = PNode::kShowAllP;
+    else if(showMomentum == "Final")
+      pMode_ = PNode::kShowFinalP;
+    else if(showMomentum == "None")
+      pMode_ = PNode::kNoP;
+    else{
+      std::cerr << "Unrecognized showMomentum value " << showMomentum << std::endl;
+      throw std::runtime_error("Configuration");
+    }
+  }
+
+  if(_ps.existsAs<bool>("showMass", false)){
+    if(_ps.getUntrackedParameter<bool>("showMass"))
+      mMode_ = PNode::kShowAllM;
+  }
+  else if(_ps.existsAs<std::string>("showMass", false)){
+    std::string showMass(_ps.getUntrackedParameter<std::string>("showMass"));
+    if(showMass == "All")
+      mMode_ = PNode::kShowAllM;
+    else if(showMass == "HardScat")
+      mMode_ = PNode::kShowHardScatM;
+    else if(showMass == "None")
+      mMode_ = PNode::kNoM;
+    else{
+      std::cerr << "Unrecognized showMass value " << showMass << std::endl;
+      throw std::runtime_error("Configuration");
+    }
+  }
 }
 
 void
@@ -46,20 +83,21 @@ GenTreeViewer::analyze(edm::Event const& _event, edm::EventSetup const&)
   if(cleaningMode_ == 0 || cleaningMode_ == 2){
     std::cout << "=== FULL DECAY TREE ===" << std::endl << std::endl;
     for(unsigned iN(0); iN < rootNodes.size(); iN++){
-      std::cout << rootNodes[iN]->print(showMomentum_, showMass_, usePtEtaPhi_);
-      std::cout << std::endl;
+      rootNodes[iN]->generateInfo(pMode_, mMode_, usePtEtaPhi_);
+      std::cout << rootNodes[iN]->print();
     }
+    std::cout << std::endl;
   }
 
   if(cleaningMode_ == 1 || cleaningMode_ == 2){
     std::cout << "--- CLEANED DECAY TREE ---" << std::endl << std::endl;
     for(unsigned iN(0); iN < rootNodes.size(); iN++){
-      cleanDaughters(rootNodes[iN]);
-      std::cout << rootNodes[iN]->print(showMomentum_, showMass_, usePtEtaPhi_);
-      std::cout << std::endl;
+      rootNodes[iN]->cleanDaughters();
+      rootNodes[iN]->generateInfo(pMode_, mMode_, usePtEtaPhi_);
+      std::cout << rootNodes[iN]->print();
     }
+    std::cout << std::endl;
   }
-  std::cout << std::endl;
 
   for(unsigned iN(0); iN != rootNodes.size(); ++iN)
     delete rootNodes[iN];
@@ -70,8 +108,8 @@ GenTreeViewer::fillDescriptions(edm::ConfigurationDescriptions& _descriptions)
 {
   edm::ParameterSetDescription desc;
   desc.addUntracked<edm::InputTag>("genParticlesTag", edm::InputTag("genParticles"));
-  desc.addUntracked<bool>("showMomentum", true);
-  desc.addUntracked<bool>("showMass", true);
+  desc.addUntracked<std::string>("showMomentum", "All");
+  desc.addUntracked<std::string>("showMass", "All");
   desc.addUntracked<bool>("usePtEtaPhi", true);
   desc.addUntracked<int>("cleaningMode", 1);
   desc.addUntracked<double>("minPt", 2.);

@@ -1,0 +1,6 @@
+*~
+*.pyc
+*.d
+*.so
+*.pcm
+__init__.py

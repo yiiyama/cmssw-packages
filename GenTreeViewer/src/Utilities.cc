@@ -6,13 +6,21 @@
 #include <algorithm>
 #include <stdexcept>
 
+#include "TVector2.h"
+
 PNode*
 setDaughters(reco::GenParticle const* _gen, std::map<reco::GenParticle const*, PNode*>& _nodeMap, double _minPt)
 {
-  if(_gen->status() == 1 && _gen->pt() < _minPt) return 0;
+  if(_gen->status() == 1 && _gen->pt() < _minPt){
+    std::cerr << "low pt final " << _gen->pdgId() << std::endl;
+    return 0;
+  }
   unsigned nD(_gen->numberOfDaughters());
   if(nD == 0){
-    if(_gen->status() != 1) return 0;
+    if(_gen->status() != 1){
+      std::cerr << "intermediate no daughter " << _gen->pdgId() << std::endl;
+      return 0;
+    }
   }
   else{
     if(_gen->status() == 1) throw std::logic_error("Status 1 particle with daughters");
@@ -21,6 +29,7 @@ setDaughters(reco::GenParticle const* _gen, std::map<reco::GenParticle const*, P
   PNode* node(new PNode);
   node->pdgId = _gen->pdgId();
   node->status = _gen->status();
+  node->statusBits = _gen->statusFlags().flags_;
   node->mass = _gen->mass();
   node->pt = _gen->pt();
   node->eta = _gen->eta();
@@ -46,10 +55,17 @@ setDaughters(reco::GenParticle const* _gen, std::map<reco::GenParticle const*, P
         int pdg(std::abs(node->pdgId));
         bool had((pdg / 100) % 10 != 0 || pdg == 21 || (pdg > 80 && pdg < 101));
         bool takeAway(false);
-        if(had && mhad)
-          takeAway = node->pt > mother->pt;
-        else if(!had && mhad)
+        if(!had && mhad)
           takeAway = true;
+        else if(had && !mhad)
+          takeAway = false;
+        else{
+          double dEtaM(mother->eta - dnode->eta);
+          double dPhiM(TVector2::Phi_mpi_pi(mother->phi - dnode->phi));
+          double dEta(node->eta - dnode->eta);
+          double dPhi(TVector2::Phi_mpi_pi(node->phi - dnode->phi));
+          takeAway = (dEta * dEta + dPhi * dPhi) < (dEtaM * dEtaM + dPhiM * dPhiM);
+        }
 
         if(takeAway){
           dnode->mother = node;
@@ -145,42 +161,4 @@ setDaughters(HepMC::GenParticle const* _gen, std::map<HepMC::GenParticle const*,
   }
 
   return node;
-}
-
-void
-cleanDaughters(PNode* node)
-{
-  int motherPdg(std::abs(node->pdgId));
-  std::vector<PNode*>& daughters(node->daughters);
-
-  for(unsigned iD(0); iD < daughters.size(); ++iD){
-    PNode* dnode(daughters[iD]);
-    cleanDaughters(dnode);
-
-    unsigned nGD(dnode->daughters.size());
-    bool intermediateTerminal(nGD == 0 && dnode->status != 1);
-    bool noDecay(nGD == 1 && dnode->pdgId == dnode->daughters.front()->pdgId);
-    int pdg(std::abs(dnode->pdgId));
-    bool hadronicIntermediate(dnode->status != 1 &&
-                              ((pdg / 100) % 10 != 0 || pdg == 21 || (pdg > 80 && pdg < 101)));
-    bool firstHeavyHadron((motherPdg / 1000) % 10 < 4 && (motherPdg / 100) % 10 < 4 &&
-                          ((pdg / 1000) % 10 >= 4 || (pdg / 100) % 10 >= 4));
-    bool lightDecayingToLight(false);
-    if(pdg < 4){
-      unsigned iGD(0);
-      for(; iGD < nGD; ++iGD)
-        if(std::abs(dnode->daughters[iGD]->pdgId) > 3) break;
-      lightDecayingToLight = iGD == nGD;
-    }
-
-    if(intermediateTerminal || noDecay || (hadronicIntermediate && !firstHeavyHadron) || lightDecayingToLight){
-      for(unsigned iGD(0); iGD < nGD; ++iGD)
-        dnode->daughters[iGD]->mother = node;
-      daughters.erase(daughters.begin() + iD);
-      daughters.insert(daughters.begin() + iD, dnode->daughters.begin(), dnode->daughters.end());
-      dnode->daughters.clear();
-      delete dnode;
-      --iD;
-    }
-  }
 }
