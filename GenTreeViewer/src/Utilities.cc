@@ -6,13 +6,21 @@
 #include <algorithm>
 #include <stdexcept>
 
+#include "TVector2.h"
+
 PNode*
 setDaughters(reco::GenParticle const* _gen, std::map<reco::GenParticle const*, PNode*>& _nodeMap, double _minPt)
 {
-  if(_gen->status() == 1 && _gen->pt() < _minPt) return 0;
+  if(_gen->status() == 1 && _gen->pt() < _minPt){
+    std::cerr << "low pt final " << _gen->pdgId() << std::endl;
+    return 0;
+  }
   unsigned nD(_gen->numberOfDaughters());
   if(nD == 0){
-    if(_gen->status() != 1) return 0;
+    if(_gen->status() != 1){
+      std::cerr << "intermediate no daughter " << _gen->pdgId() << std::endl;
+      return 0;
+    }
   }
   else{
     if(_gen->status() == 1) throw std::logic_error("Status 1 particle with daughters");
@@ -47,10 +55,17 @@ setDaughters(reco::GenParticle const* _gen, std::map<reco::GenParticle const*, P
         int pdg(std::abs(node->pdgId));
         bool had((pdg / 100) % 10 != 0 || pdg == 21 || (pdg > 80 && pdg < 101));
         bool takeAway(false);
-        if(had && mhad)
-          takeAway = node->pt > mother->pt;
-        else if(!had && mhad)
+        if(!had && mhad)
           takeAway = true;
+        else if(had && !mhad)
+          takeAway = false;
+        else{
+          double dEtaM(mother->eta - dnode->eta);
+          double dPhiM(TVector2::Phi_mpi_pi(mother->phi - dnode->phi));
+          double dEta(node->eta - dnode->eta);
+          double dPhi(TVector2::Phi_mpi_pi(node->phi - dnode->phi));
+          takeAway = (dEta * dEta + dPhi * dPhi) < (dEtaM * dEtaM + dPhiM * dPhiM);
+        }
 
         if(takeAway){
           dnode->mother = node;
