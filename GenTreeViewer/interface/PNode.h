@@ -236,7 +236,7 @@ struct PNode {
 
     for(unsigned iD(0); iD < daughters.size(); ++iD){
       PNode* dnode(daughters[iD]);
-      dnode->cleanDaughters();
+      dnode->cleanDaughters(_doDelete);
 
       unsigned nGD(dnode->daughters.size());
       bool intermediateTerminal(nGD == 0 && dnode->status != 1);
