@@ -12,6 +12,8 @@
 
 #include "TH1D.h"
 
+#include <iostream>
+
 class EcalSimHitFilter : public edm::EDFilter {
 public:
   explicit EcalSimHitFilter(edm::ParameterSet const&);
@@ -28,6 +30,7 @@ private:
 
   edm::EDGetTokenT<edm::PCaloHitContainer> ebContainerToken_;
   edm::EDGetTokenT<edm::PCaloHitContainer> eeContainerToken_;
+  edm::EDGetTokenT<double> eventWeightToken_;
   unsigned minN_ = 0;
   unsigned minNEB_ = 0;
   unsigned minNEE_ = 0;
@@ -41,6 +44,7 @@ private:
 EcalSimHitFilter::EcalSimHitFilter(edm::ParameterSet const& _cfg) :
   ebContainerToken_(consumes<edm::PCaloHitContainer>(_cfg.getParameter<edm::InputTag>("ebHits"))),
   eeContainerToken_(consumes<edm::PCaloHitContainer>(_cfg.getParameter<edm::InputTag>("eeHits"))),
+  eventWeightToken_(consumes<double>(_cfg.getParameter<edm::InputTag>("eventWeight"))),
   minN_(_cfg.getParameter<int>("minN")),
   minNEB_(_cfg.getParameter<int>("minNEB")),
   minNEE_(_cfg.getParameter<int>("minNEE")),
@@ -65,6 +69,13 @@ EcalSimHitFilter::beginJob()
 bool
 EcalSimHitFilter::filter(edm::Event& _event, edm::EventSetup const&)
 {
+  edm::Handle<double> weightHandle;
+  if (!_event.getByToken(eventWeightToken_, weightHandle))
+    throw cms::Exception("ProductNotFound") << "Event weight";
+
+  if (*weightHandle == 0.)
+    return false;
+
   edm::Handle<edm::PCaloHitContainer> ebHandle;
   if (!_event.getByToken(ebContainerToken_, ebHandle))
     throw cms::Exception("ProductNotFound") << "EB Hits";
