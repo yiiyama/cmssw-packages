@@ -10,7 +10,7 @@ double PNode::matchPhi(0.);
 double PNode::matchDR(0.);
 
 void
-GenTreeViewerBambu(mithep::MCParticleCol const* _particles, double _ptThreshold = 0., PNode::MomentumDispMode _showP = PNode::kShowFinalP, PNode::MassDispMode _showM = PNode::kShowHardScatM)
+GenTreeViewerBambu(mithep::MCParticleCol const* _particles, double _ptThreshold = 0., PNode::MomentumDispMode _showP = PNode::kShowFinalP, PNode::MassDispMode _showM = PNode::kShowHardScatM, bool _cleanDaughters = true)
 {
   std::vector<PNode> allNodes;
   std::vector<PNode*> rootNodes;
@@ -54,9 +54,14 @@ GenTreeViewerBambu(mithep::MCParticleCol const* _particles, double _ptThreshold 
     }
   }
   
-  std::cout << "--- CLEANED DECAY TREE ---" << std::endl << std::endl;
+  if (_cleanDaughters)
+    std::cout << "--- CLEANED DECAY TREE ---" << std::endl << std::endl;
+  else
+    std::cout << "--- FULL DECAY TREE ---" << std::endl << std::endl;
+
   for (auto* rootNode : rootNodes) {
-    rootNode->cleanDaughters(false);
+    if (_cleanDaughters)
+      rootNode->cleanDaughters(false);
     rootNode->generateInfo(_showP, _showM, true);
     std::cout << rootNode->print();
   }
