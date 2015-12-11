@@ -1,0 +1,17 @@
+<use name="root"/>
+<use name="FWCore/Framework"/>
+<use name="FWCore/Utilities"/>
+<use name="FWCore/ParameterSet"/>
+<use name="DataFormats/Common"/>
+<use name="DataFormats/EgammaCandidates"/>
+<use name="DataFormats/METReco"/>
+<use name="DataFormats/MuonReco"/>
+<use name="DataFormats/HepMCCandidate"/>
+<use name="DataFormats/CaloRecHit"/>
+<use name="FWCore/ServiceRegistry"/>
+<use name="CommonTools/UtilAlgos"/>
+<use name="RecoEcal/EgammaCoreTools"/>
+<use name="Toolset/BeamHalo"/>
+<library file="*.cc" name="ToolsetBeamHaloPlugins">
+   <flags EDM_PLUGIN="1"/>
+</library>
