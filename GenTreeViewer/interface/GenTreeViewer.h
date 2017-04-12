@@ -21,16 +21,9 @@
 #include "FWCore/Framework/interface/Frameworkfwd.h"
 #include "FWCore/Framework/interface/EDAnalyzer.h"
 
-#include "FWCore/Utilities/interface/InputTag.h"
+#include "DataFormats/HepMCCandidate/interface/GenParticleFwd.h"
 
 #include "PNode.h"
-
-namespace edm {
-  class ParameterSet;
-  class ConfigurationDescriptions;
-  class Event;
-  class EventSetup;
-}
 
 class GenTreeViewer : public edm::EDAnalyzer {
  public:
@@ -42,7 +35,7 @@ class GenTreeViewer : public edm::EDAnalyzer {
  private:
   virtual void analyze(edm::Event const&, edm::EventSetup const&);
 
-  edm::InputTag genParticlesTag_;
+  edm::EDGetTokenT<reco::GenParticleCollection> genParticlesToken_;
   PNode::MomentumDispMode pMode_;
   PNode::MassDispMode mMode_;
   bool usePtEtaPhi_;

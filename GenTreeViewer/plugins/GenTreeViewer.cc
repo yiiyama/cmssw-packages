@@ -3,6 +3,8 @@
 #include "FWCore/Framework/interface/Event.h"
 #include "FWCore/Framework/interface/MakerMacros.h"
 
+#include "FWCore/Utilities/interface/InputTag.h"
+
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
 #include "FWCore/ParameterSet/interface/ConfigurationDescriptions.h"
 #include "FWCore/ParameterSet/interface/ParameterSetDescription.h"
@@ -10,7 +12,6 @@
 #include "DataFormats/Common/interface/Handle.h"
 
 #include "DataFormats/HepMCCandidate/interface/GenParticle.h"
-#include "DataFormats/HepMCCandidate/interface/GenParticleFwd.h"
 
 #include "../interface/Utilities.h"
 
@@ -18,7 +19,7 @@
 #include <stdexcept>
 
 GenTreeViewer::GenTreeViewer(edm::ParameterSet const& _ps) :
-  genParticlesTag_(_ps.getUntrackedParameter<edm::InputTag>("genParticlesTag", edm::InputTag("genParticles"))),
+  genParticlesToken_(consumes<reco::GenParticleCollection>(_ps.getUntrackedParameter<edm::InputTag>("genParticlesTag", edm::InputTag("genParticles")))),
   pMode_(PNode::kNoP),
   mMode_(PNode::kNoM),
   usePtEtaPhi_(_ps.getUntrackedParameter<bool>("usePtEtaPhi", true)),
@@ -66,7 +67,7 @@ void
 GenTreeViewer::analyze(edm::Event const& _event, edm::EventSetup const&)
 {
   edm::Handle<reco::GenParticleCollection> gpHndl;
-  if(!_event.getByLabel(genParticlesTag_, gpHndl)) return;
+  if(!_event.getByToken(genParticlesToken_, gpHndl)) return;
 
   std::map<reco::GenParticle const*, PNode*> nodeMap;
   std::vector<PNode*> rootNodes;
