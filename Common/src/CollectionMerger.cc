@@ -116,7 +116,7 @@ CollectionMerger::produce(edm::Event& iEvent, edm::EventSetup const&)
 
   if(colType_ == "Photon"){
     //     if(clone_){
-    std::auto_ptr<reco::PhotonCollection> output(new reco::PhotonCollection);
+    std::unique_ptr<reco::PhotonCollection> output(new reco::PhotonCollection);
     unsigned iOut(0);
     for (auto&& mPtr : merged) {
       auto* photon(dynamic_cast<reco::Photon const*>(mPtr.get()));
@@ -126,7 +126,7 @@ CollectionMerger::produce(edm::Event& iEvent, edm::EventSetup const&)
       if (++iOut == maxOutputSize_)
         break;
     }
-    iEvent.put(output);
+    iEvent.put(std::move(output));
     //    }
     //    else{
     //      std::auto_ptr<RefToBaseVector<reco::Photon> > output(new RefToBaseVector<>);
@@ -141,7 +141,7 @@ CollectionMerger::produce(edm::Event& iEvent, edm::EventSetup const&)
     //       produces<edm::RefToBaseVector<reco::Photon> >();
   }
   else if(colType_ == "Electron"){
-    std::auto_ptr<reco::GsfElectronCollection> output(new reco::GsfElectronCollection);
+    std::unique_ptr<reco::GsfElectronCollection> output(new reco::GsfElectronCollection);
     unsigned iOut(0);
     for (auto&& mPtr : merged) {
       auto* electron(dynamic_cast<reco::GsfElectron const*>(mPtr.get()));
@@ -151,10 +151,10 @@ CollectionMerger::produce(edm::Event& iEvent, edm::EventSetup const&)
       if (++iOut == maxOutputSize_)
         break;
     }
-    iEvent.put(output);
+    iEvent.put(std::move(output));
   }
   else if(colType_ == "Muon"){
-    std::auto_ptr<reco::MuonCollection> output(new reco::MuonCollection);
+    std::unique_ptr<reco::MuonCollection> output(new reco::MuonCollection);
     unsigned iOut(0);
     for (auto&& mPtr : merged) {
       auto* muon(dynamic_cast<reco::Muon const*>(mPtr.get()));
@@ -164,7 +164,7 @@ CollectionMerger::produce(edm::Event& iEvent, edm::EventSetup const&)
       if (++iOut == maxOutputSize_)
         break;
     }
-    iEvent.put(output);
+    iEvent.put(std::move(output));
   }
 }
 

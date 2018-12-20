@@ -5,5 +5,6 @@
 <use name="DataFormats/EgammaCandidates"/>
 <use name="DataFormats/MuonReco"/>
 <use name="DataFormats/EcalDigi"/>
+<use name="DataFormats/JetReco"/>
 <flags EDM_PLUGIN="1"/>
 
